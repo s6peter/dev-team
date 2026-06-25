@@ -1,0 +1,28 @@
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+  - template: Security/Container-Scanning.gitlab-ci.yml
+
+container_scanning:
+  allow_failure: true
+
+trivy:image-scan:
+  image: docker:24
+  stage: security
+  extends: .rules-merge-request-or-main
+  needs:
+    - docker:build-and-publish
+  services:
+    - name: docker:24-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    TRIVY_NO_PROGRESS: "true"
+  before_script:
+    - docker version
+    - apk add --no-cache curl
+    - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.49.0
+  script:
+    - trivy image --exit-code 0 --severity HIGH,CRITICAL "sample-api:$CI_COMMIT_SHORT_SHA"
+  allow_failure: true

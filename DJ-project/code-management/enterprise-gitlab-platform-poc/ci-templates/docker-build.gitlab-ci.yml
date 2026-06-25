@@ -1,0 +1,16 @@
+docker:build-and-publish:
+  image: docker:24
+  stage: build
+  extends: .rules-merge-request-or-main
+  services:
+    - name: docker:24-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+    IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  before_script:
+    - docker version
+  script:
+    - docker build -t "sample-api:$IMAGE_TAG" .
+    - docker tag "sample-api:$IMAGE_TAG" "sample-api:latest"
+    - echo Built image - sample-api

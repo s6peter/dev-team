@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-jose
+python-multipart
+email-validator
+passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
+jinja2
+psycopg2-binary  # for Postgres

@@ -1,0 +1,25 @@
+---
+- name: Check platform service health
+  hosts: gitlab
+  become: true
+
+  tasks:
+    - name: List Docker Compose services
+      ansible.builtin.command: docker compose -f /opt/boa-platform/docker-compose.yml ps
+      changed_when: false
+      register: compose_ps
+
+    - name: Show service state
+      ansible.builtin.debug:
+        var: compose_ps.stdout_lines
+
+    - name: Check GitLab readiness endpoint
+      ansible.builtin.uri:
+        url: http://localhost/-/readiness
+        status_code: [200, 503]
+      register: gitlab_readiness
+
+    - name: Show GitLab readiness response
+      ansible.builtin.debug:
+        var: gitlab_readiness.status
+

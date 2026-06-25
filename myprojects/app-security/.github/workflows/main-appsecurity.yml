@@ -1,0 +1,91 @@
+name: Example workflow for app security SAST, SCA, IAST, DAST
+
+on: [push, pull_request]
+
+permissions:
+  security-events: write
+  actions: read
+  contents: read
+
+jobs:
+  docker-build-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build and push images
+        run: |
+          services="assets cart catalog checkout orders ui"
+          for service in $services; do
+            path="./src/$service"
+            if [ -d "$path" ]; then
+              image="perscoba/appsec-revive-${service}:latest"
+              echo "🔧 Building $service at $path"
+              docker build -t "$image" "$path"
+              echo "🚀 Pushing $image"
+              docker push "$image"
+            else
+              echo "⚠️ Skipping $service – directory $path not found"
+            fi
+          done
+            
+
+
+
+  security-scans:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (required for Snyk CLI)
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Snyk Test (SAST + SCA)
+        run: snyk test --all-projects --sarif-file-output=snyk.sarif
+        continue-on-error: true
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk.sarif
+
+  dast-hawkscan:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+
+    steps:
+      - name: Run Nginx (example app for DAST scan)
+        run: docker run --rm --detach --publish 8080:80 --name nginx_test nginx
+
+      - name: Wait for service to be ready
+        run: |
+          for i in {1..10}; do
+            if curl -sSf http://localhost:8080 > /dev/null; then
+              echo "Service is up"
+              break
+            else
+              echo "Waiting for service..."
+              sleep 3
+            fi
+          done
+
+      - name: Run HawkScan (DAST)
+        uses: stackhawk/hawkscan-action@v2
+        with:
+          apiKey: ${{ secrets.HAWK_API_KEY }}

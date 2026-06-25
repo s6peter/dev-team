@@ -1,0 +1,105 @@
+# # serverless.yml
+# service: create-s3-bucket
+
+# provider:
+#   name: aws
+#   runtime: python3.8
+#   stage: ${opt:stage, 'dev'}
+#   region: us-east-1
+
+#   iam:
+#     role:
+#       statements:
+#         - Effect: Allow
+#           Action:
+#             - s3:GetObject
+#           Resource: !Sub 'arn:aws:s3:::${MyDataBucket}/*'
+
+#         - Effect: Allow
+#           Action:
+#             - s3:PutObject
+#             - s3:PutObjectAcl
+#           Resource: !Sub 'arn:aws:s3:::${MyDataBucket}/*'
+
+#         - Effect: Allow
+#           Action:
+#             - s3:ListBucket
+#           Resource: !GetAtt MyDataBucket.Arn
+
+# resources:
+#   Resources:
+#     MyDataBucket:
+#       Type: AWS::S3::Bucket
+#       Properties:
+#         BucketName: my-data-bucket-${self:provider.stage} # or just omit BucketName to let AWS auto-generate it
+
+
+
+# service: create-s3-bucket
+
+# provider:
+#   name: aws
+#   runtime: python3.8
+#   stage: ${opt:stage, 'dev'}
+#   region: us-east-1
+
+#   iam:
+#     role:
+#       statements:
+#         - Effect: Allow
+#           Action: 
+#             - s3:*
+#           Resource:
+#             - !Sub 'arn:aws:s3:::${MyDataBucket}'     # Full access to the bucket itself (needed for actions like ListBucket, DeleteBucket, etc.)
+#             - !Sub 'arn:aws:s3:::${MyDataBucket}/*'   # Full access to objects inside the bucket
+
+# resources:
+#   Resources:
+#     MyDataBucket:
+#       Type: AWS::S3::Bucket
+#       Properties:
+#         BucketName: my-data-bucket-${self:provider.stage}
+
+
+
+#How do you define resources like s3 within the Serverless Framework configuration file (serverless.yml)?
+
+#This question evaluates your understanding of defining and configuring AWS resources in the serverless.yml file.
+service: create-s3-bucket
+
+provider:
+  name: aws
+  runtime: python3.8
+  stage: ${opt:stage, 'dev'}
+  region: us-east-1
+
+  iam:
+    role:
+      managedPolicies:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+resources:
+  Resources:
+    MyDataBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Delete
+      Properties:
+        BucketName: !Sub my-data-bucket-${self:provider.stage}-${AWS::AccountId}
+        VersioningConfiguration:
+          Status: Enabled
+        AccessControl: Private 
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: true
+          RestrictPublicBuckets: true
+
+        # Enable Server-Side Encryption (SSE-S3)
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256 # Or use 'aws:kms' for KMS encryption
+
+        Tags:
+          - Key: Environment
+            Value: ${sls:stage}

@@ -1,0 +1,42 @@
+# Example terraform.tfvars
+# Copy this file to terraform.tfvars and adjust values
+
+environment   = "prod"
+project_name  = "gitlab-enterprise"
+aws_region    = "us-east-1"
+
+gitlab_domain          = "gitlab.oncor.example.com"
+gitlab_hosted_zone_id  = "Z1234567890EXAMPLE"
+ssl_certificate_arn    = "arn:aws:acm:us-east-1:123456789012:certificate/abc12345-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Instance sizes (adjust based on user count)
+gitlab_instance_type    = "m6i.4xlarge"   # 16 vCPU, 64 GB RAM
+gitlab_instance_count   = 2
+runner_instance_type    = "c6i.2xlarge"   # 8 vCPU, 16 GB RAM
+runner_min_count        = 2
+runner_max_count        = 20
+
+# Database
+db_instance_class       = "db.r6g.xlarge"  # 4 vCPU, 32 GB RAM
+db_allocated_storage    = 500
+db_multi_az             = true
+
+# Redis
+redis_node_type         = "cache.r6g.large"  # 2 vCPU, 13 GB RAM
+
+# Networking
+vpc_cidr             = "10.0.0.0/16"
+availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+# If you have an existing KMS key, set this; otherwise leave empty to create one
+# kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/xxxx-xxxx"
+
+backup_retention_days = 30
+
+tags = {
+  Project     = "code-management-platform"
+  Environment = "prod"
+  ManagedBy   = "terraform"
+  Team        = "platform-engineering"
+  CostCenter  = "infra-123"
+}

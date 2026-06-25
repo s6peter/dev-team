@@ -1,0 +1,56 @@
+{
+  "security_analyst": {
+    "cluster_permissions": [
+      "cluster_composite_ops_ro"
+    ],
+    "index_permissions": [
+      {
+        "index_patterns": [
+          "cloudtrail-logs*",
+          "security-signals*"
+        ],
+        "allowed_actions": [
+          "read",
+          "search",
+          "indices_monitor"
+        ]
+      }
+    ],
+    "tenant_permissions": [
+      {
+        "tenant_patterns": [
+          "global_tenant"
+        ],
+        "allowed_actions": [
+          "kibana_all_read"
+        ]
+      }
+    ]
+  },
+  "siem_admin": {
+    "cluster_permissions": [
+      "cluster_all"
+    ],
+    "index_permissions": [
+      {
+        "index_patterns": [
+          "cloudtrail-logs*",
+          "security-signals*"
+        ],
+        "allowed_actions": [
+          "indices_all"
+        ]
+      }
+    ],
+    "tenant_permissions": [
+      {
+        "tenant_patterns": [
+          "global_tenant"
+        ],
+        "allowed_actions": [
+          "kibana_all_write"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+service: example-service
+
+provider:
+  name: aws
+  runtime: python3.9
+
+functions:
+  myFunction:
+    handler: handler.myFunction
+    events:
+      - http:
+          path: path-name
+          method: get|post
+
+
+
+import json
+
+def myFunction(event, context):
+    return {
+        "statusCode": 200,
+        "body": json.dumps({"key": "value"})
+    }

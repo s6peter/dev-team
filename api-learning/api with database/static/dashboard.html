@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+    <h2>Dashboard</h2>
+    <button id="get-users">Fetch Users</button>
+    <pre id="output"></pre>
+
+    <script>
+    document.getElementById("get-users").addEventListener("click", async () => {
+        const token = localStorage.getItem("jwt_token");
+        if (!token) {
+            alert("Please login first.");
+            return;
+        }
+
+        try {
+            const response = await fetch("http://localhost:8000/users", {
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                alert("Error: " + JSON.stringify(err));
+                return;
+            }
+
+            const data = await response.json();
+            document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+        } catch (err) {
+            alert("Failed to fetch users: " + err.message);
+        }
+    });
+    </script>
+</body>
+</html>

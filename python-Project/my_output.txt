@@ -1,0 +1,19 @@
+Desktop
+Documents
+Downloads
+log_data.txt
+Music
+my_output.txt
+Pictures
+processed_logs.txt
+Public
+PycharmProjects
+python
+python_dir
+python.ipynb
+snap
+Templates
+Top coding patterns .ipynb
+Videos
+v-project
+working with filesand strings.ipynb

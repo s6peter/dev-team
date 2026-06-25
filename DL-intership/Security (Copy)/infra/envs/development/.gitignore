@@ -1,0 +1,33 @@
+
+# Local .terraform directories
+**/.terraform/*
+*/**/.terraform
+
+.tfstate
+*.tfstate
+*.tfstate.*
+*.terraform.lock.*
+*.tfstate.backup
+*.tfstate.*.backup
+
+# Ignore plan outputs
+*.tfplan
+*.tfplan.*
+
+# Ignore override files as they are usually used to override resources locally
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terragrunt files and directories
+*/**/.terragrunt-cache/
+*/**/.terraform.lock/
+*/**/.terraform.lock.hcl/
+*/**/.terragrunt/
+
+# Ignore override files 
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

@@ -1,0 +1,14 @@
+# No-cost validation mode. This lets you run terraform init/validate/plan without creating resources.
+aws_region   = "us-east-1"
+project_name = "gitlab-cloud-native"
+environment  = "test"
+
+create_vpc        = false
+create_eks        = false
+create_rds        = false
+create_redis      = false
+create_s3_buckets = false
+create_waf        = false
+
+gitlab_domain = "gitlab.example.com"
+admin_cidrs   = ["203.0.113.10/32"]

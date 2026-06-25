@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  ui:
+    build:
+      context: ./src/ui
+      dockerfile: Dockerfile
+    ports:
+      - "9090:8080"  # maps host:container
+    restart: unless-stopped
+    depends_on:
+      - assets
+      - cart
+      - catalog
+      - checkout
+      - orders
+
+  assets:
+    build:
+      context: ./src/assets
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9010:8080"  # example; adjust if needed
+
+  cart:
+    build:
+      context: ./src/cart
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9020:8080"
+
+  catalog:
+    build:
+      context: ./src/catalog
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9030:8080"
+
+  checkout:
+    build:
+      context: ./src/checkout
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9040:8080"
+
+  orders:
+    build:
+      context: ./src/orders
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9050:8080"
+

@@ -1,0 +1,5 @@
+name: my-eg-app
+namespace: my-eg-app
+
+
+replicas: 2

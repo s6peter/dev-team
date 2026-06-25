@@ -1,0 +1,84 @@
+{
+  "index_patterns": [
+    "cloudtrail-logs*"
+  ],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "refresh_interval": "30s",
+      "plugins.index_state_management.policy_id": "siem-hot-warm-delete",
+      "plugins.index_state_management.rollover_alias": "cloudtrail-logs"
+    },
+    "mappings": {
+      "dynamic": true,
+      "date_detection": true,
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "message_type": {
+          "type": "keyword"
+        },
+        "owner": {
+          "type": "keyword"
+        },
+        "log_group": {
+          "type": "keyword"
+        },
+        "log_stream": {
+          "type": "keyword"
+        },
+        "event_count": {
+          "type": "integer"
+        },
+        "event_names": {
+          "type": "keyword"
+        },
+        "event_sources": {
+          "type": "keyword"
+        },
+        "event_regions": {
+          "type": "keyword"
+        },
+        "event_times": {
+          "type": "date"
+        },
+        "source_ip_addresses": {
+          "type": "ip",
+          "ignore_malformed": true
+        },
+        "user_agents": {
+          "type": "keyword",
+          "ignore_above": 1024
+        },
+        "user_names": {
+          "type": "keyword",
+          "ignore_above": 512
+        },
+        "identity_types": {
+          "type": "keyword"
+        },
+        "error_codes": {
+          "type": "keyword"
+        },
+        "read_only_values": {
+          "type": "keyword"
+        },
+        "primary_event": {
+          "type": "object",
+          "dynamic": true
+        },
+        "events": {
+          "type": "nested",
+          "dynamic": true
+        },
+        "_firehose_metadata": {
+          "type": "object",
+          "dynamic": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+deploy:update-gitops:
+  image: alpine:3.20
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  allow_failure: true
+  before_script:
+    - apk add --no-cache git yq
+    - git config --global user.email "platform-ci@example.com"
+    - git config --global user.name "Platform CI"
+  script:
+    - git clone "$GITOPS_REPO_URL" gitops-config
+    - cd gitops-config
+    - yq -i '.spec.template.spec.containers[0].image = "sample-api:" + strenv(CI_COMMIT_SHORT_SHA)' "gitops/${ENVIRONMENT}/sample-api/deployment.yaml"
+    - git add "gitops/${ENVIRONMENT}/sample-api/deployment.yaml"
+    - git commit -m "Deploy sample-api ${CI_COMMIT_SHORT_SHA} to ${ENVIRONMENT}" || echo "No GitOps change"
+    - git push origin main
+

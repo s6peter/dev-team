@@ -1,0 +1,4 @@
+aws_region        = "us-east-1"
+state_bucket_name = "boa-gitlab-software-factory-poc-tfstate-CHANGE-ME"
+lock_table_name   = "boa-gitlab-software-factory-poc-locks"
+

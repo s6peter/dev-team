@@ -1,0 +1,41 @@
+{
+  "description": "Normalize CloudTrail batches for OpenSearch SIEM dashboards and alerting.",
+  "processors": [
+    {
+      "set": {
+        "field": "event.dataset",
+        "value": "aws.cloudtrail"
+      }
+    },
+    {
+      "set": {
+        "field": "event.module",
+        "value": "aws"
+      }
+    },
+    {
+      "set": {
+        "field": "cloud.provider",
+        "value": "aws"
+      }
+    },
+    {
+      "date": {
+        "field": "@timestamp",
+        "formats": [
+          "strict_date_optional_time",
+          "epoch_millis"
+        ],
+        "ignore_failure": true
+      }
+    }
+  ],
+  "on_failure": [
+    {
+      "set": {
+        "field": "ingest.failure_message",
+        "value": "{{ _ingest.on_failure_message }}"
+      }
+    }
+  ]
+}

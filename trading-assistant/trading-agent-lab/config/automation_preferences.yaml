@@ -1,0 +1,92 @@
+location:
+  city: Denton
+  state: TX
+  timezone: America/Chicago
+
+delivery:
+  enabled: true
+  reason_disabled: ""
+  channel: discord_webhook
+  webhook_env_var: DISCORD_WEBHOOK_URL
+  schedule:
+    market_open:
+      enabled: true
+      local_time: "08:35"
+      purpose: Pre-market/opening risk and watchlist brief.
+    midday:
+      enabled: true
+      local_time: "12:00"
+      purpose: Midday paper-trade and volatility check.
+    market_close:
+      enabled: true
+      local_time: "15:10"
+      purpose: Closing review and next-day prep.
+  quiet_hours:
+    enabled: true
+    local_start: "20:00"
+    local_end: "07:00"
+    note: Default quiet hours; update if user wants different notification windows.
+
+market_data:
+  primary_source: robinhood_read_only
+  allowed_tools:
+    - get_equity_quotes
+    - get_equity_historicals
+    - get_equity_tradability
+    - get_watchlists
+    - get_watchlist_items
+    - search
+  forbidden_tools:
+    - review_equity_order
+    - place_equity_order
+    - cancel_equity_order
+
+universe:
+  equities:
+    enabled: true
+    filter: large_cap_only
+  etfs:
+    enabled: true
+    filter: liquid_only
+  themes:
+    - AI
+    - technology
+    - semiconductors
+    - S&P 500 large caps
+  crypto:
+    research_only: true
+    trading_allowed: false
+    reason: Current risk policy has allow_crypto=false.
+
+strategy_focus:
+  objective: Detect sudden price rises/falls, protect capital, and take paper profits when rules say to.
+  allowed_currently:
+    - market_research
+    - watchlist_updates
+    - paper_trading
+    - paper_profit_tracking
+    - read_only_quote_checks
+  not_allowed_currently:
+    - real_trading
+    - live_order_review
+    - autonomous_trading
+    - short_selling
+    - options
+    - margin
+    - crypto_trading
+
+paper_trade_limits:
+  max_active_paper_trades: 3
+  default_fake_allocation_per_idea: 100
+  max_total_fake_exposure: 300
+  minimum_review_frequency: daily
+  require_invalidation: true
+  require_review_target: true
+  require_take_profit_plan: true
+  require_stop_or_close_rule: true
+
+risk_posture:
+  short_selling_enabled: false
+  live_testing_enabled: false
+  autonomous_trading_enabled: false
+  real_trading_approved: false

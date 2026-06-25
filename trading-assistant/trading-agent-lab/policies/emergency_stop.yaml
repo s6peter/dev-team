@@ -1,0 +1,42 @@
+enabled: false
+
+scope:
+  applies_to:
+    - real_trade_review
+    - live_testing
+    - autonomous_trading
+  paper_trading_allowed_when_triggered: false
+
+hard_stops:
+  stale_or_missing_market_data: true
+  ledger_journal_mismatch: true
+  risk_rules_unreadable: true
+  emergency_stop_file_unreadable: true
+  account_mismatch: true
+  robinhood_tool_error: true
+  unexpected_open_order: true
+  user_approval_phrase_missing: true
+  requested_action_uses_blocked_tool: true
+  asset_not_allowed_by_policy: true
+  strategy_not_allowed_by_policy: true
+  thesis_missing_or_unclear: true
+  invalidation_missing_or_unclear: true
+  reason_not_to_trade_missing: true
+  political_signal_uses_private_or_leaked_info: true
+
+blocked_when_triggered:
+  - review_equity_order
+  - place_equity_order
+  - cancel_equity_order
+  - place_option_order
+  - cancel_option_order
+
+required_response:
+  decision: STOP
+  action: Do not proceed. Explain the trigger, update the journal, and ask the user for explicit next instructions.
+
+notes:
+  - This file does not enable live trading.
+  - This file does not enable autonomous trading.
+  - This file does not approve order review.
+  - This file is a safety gate only.

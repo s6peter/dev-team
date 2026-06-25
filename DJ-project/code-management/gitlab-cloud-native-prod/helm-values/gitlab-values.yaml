@@ -1,0 +1,158 @@
+# Production-oriented GitLab Helm values for AWS EKS.
+# Replace every CHANGE_ME value before installing.
+# Install with the official chart vendored under ../charts/gitlab or from repo gitlab/gitlab.
+
+global:
+  edition: ce
+
+  hosts:
+    domain: CHANGE_ME_example.com
+    https: true
+    gitlab:
+      name: gitlab.CHANGE_ME_example.com
+    registry:
+      name: registry.CHANGE_ME_example.com
+    kas:
+      name: kas.CHANGE_ME_example.com
+
+  ingress:
+    enabled: true
+    configureCertmanager: false
+    class: alb
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/certificate-arn: CHANGE_ME_ACM_CERTIFICATE_ARN
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/healthcheck-path: /-/readiness
+    tls:
+      enabled: false
+
+  # External PostgreSQL on Amazon RDS.
+  psql:
+    host: CHANGE_ME_RDS_ENDPOINT
+    port: 5432
+    database: gitlabhq_production
+    username: gitlab
+    password:
+      secret: gitlab-postgres-password
+      key: password
+
+  # External Redis on Amazon ElastiCache.
+  redis:
+    host: CHANGE_ME_REDIS_ENDPOINT
+    port: 6379
+    auth:
+      enabled: false
+
+  # External object storage on Amazon S3.
+  appConfig:
+    object_store:
+      enabled: true
+      proxy_download: true
+      connection:
+        secret: gitlab-object-storage
+        key: connection
+    artifacts:
+      bucket: CHANGE_ME_ARTIFACTS_BUCKET
+    lfs:
+      bucket: CHANGE_ME_LFS_BUCKET
+    uploads:
+      bucket: CHANGE_ME_UPLOADS_BUCKET
+    packages:
+      bucket: CHANGE_ME_PACKAGES_BUCKET
+    externalDiffs:
+      bucket: CHANGE_ME_EXTERNAL_DIFFS_BUCKET
+    terraformState:
+      bucket: CHANGE_ME_TERRAFORM_STATE_BUCKET
+    dependencyProxy:
+      bucket: CHANGE_ME_DEPENDENCY_PROXY_BUCKET
+    backups:
+      bucket: CHANGE_ME_BACKUPS_BUCKET
+      tmpBucket: CHANGE_ME_BACKUPS_BUCKET
+
+  registry:
+    bucket: CHANGE_ME_REGISTRY_BUCKET
+
+  shell:
+    port: 22
+
+  kas:
+    enabled: true
+
+installCertmanager: false
+
+nginx-ingress:
+  enabled: false
+
+prometheus:
+  install: false
+
+postgresql:
+  install: false
+
+redis:
+  install: false
+
+minio:
+  enabled: false
+
+gitlab-runner:
+  install: false
+
+registry:
+  enabled: true
+  storage:
+    secret: gitlab-registry-storage
+    key: config
+
+gitlab:
+  webservice:
+    minReplicas: 2
+    maxReplicas: 6
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1.5Gi
+      limits:
+        cpu: 2
+        memory: 3Gi
+    nodeSelector:
+      workload: gitlab-app
+
+  sidekiq:
+    minReplicas: 2
+    maxReplicas: 6
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2
+        memory: 3Gi
+    nodeSelector:
+      workload: gitlab-app
+
+  gitlab-shell:
+    minReplicas: 2
+    maxReplicas: 4
+    nodeSelector:
+      workload: gitlab-app
+
+  toolbox:
+    backups:
+      objectStorage:
+        config:
+          secret: gitlab-object-storage
+          key: connection
+    nodeSelector:
+      workload: gitlab-app
+
+shared-secrets:
+  enabled: true
+
+migrations:
+  nodeSelector:
+    workload: gitlab-app

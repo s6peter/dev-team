@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps-dev
+  labels:
+    environment: dev
+    owner: application-teams
+

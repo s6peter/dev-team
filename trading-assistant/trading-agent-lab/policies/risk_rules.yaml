@@ -1,0 +1,197 @@
+mode: live_testing
+
+policy_files:
+  trading_strategy: kb/trading_strategy.md
+  source_of_truth: signals/source_of_truth.md
+  emergency_stop: policies/emergency_stop.yaml
+  short_selling: policies/short_selling_policy.md
+  paper_trade_ledger: signals/paper_trade_ledger.md
+  performance_summary: signals/performance_summary.md
+  automation_preferences: config/automation_preferences.yaml
+
+account_rules:
+  allow_margin: false
+  require_cash_only_trading: true
+  require_settled_cash_only: false
+  allow_instant_deposits: true
+  reject_margin_buying_power: true
+  allow_options: false
+  allow_crypto: true
+  allow_short_selling: false
+  allow_paper_short_selling: true
+
+asset_rules:
+  allowed_assets:
+    - long_equities
+    - ETFs
+    - crypto
+    - paper_short_equities
+  blocked_assets:
+    - options
+    - margin_positions
+    - live_short_positions
+    - futures
+    - leveraged_ETFs
+    - penny_stocks
+    - illiquid_stocks
+
+trade_rules:
+  max_test_trade_dollars: 10
+  max_live_trade_dollars_must_be_lte_settled_cash: true
+  reject_trade_if_notional_exceeds_available_cash: true
+  reject_trade_if_order_requires_margin_or_borrow: true
+  max_position_percent_of_portfolio: 20
+  max_daily_trades: 1
+  max_daily_loss_percent: 1
+  max_weekly_loss_percent: 3
+  max_paper_short_positions: 3
+  max_paper_short_risk_percent: 0.5
+  require_macro_trigger_for_paper_short: true
+  require_squeeze_risk_check_for_paper_short: true
+  require_review_equity_order: true
+  require_review_crypto_order: true
+  require_user_approval_phrase: "I approve"
+  require_regular_market_hours: false
+  allow_extended_hours_with_manual_instruction: true
+
+blocked_robinhood_tools:
+  - cancel_equity_order
+  - place_option_order
+  - cancel_option_order
+
+restricted_robinhood_execution_tools:
+  place_equity_order:
+    allowed_only_when:
+      - mode_is_live_testing
+      - live_testing_rules_enabled
+      - risk_manager_approved
+      - review_equity_order_completed
+      - exact_user_approval_phrase_received
+      - order_notional_lte_settled_cash
+      - no_margin_or_borrow_required
+    blocked_for:
+      - options
+      - margin_positions
+      - live_short_positions
+      - futures
+      - leveraged_ETFs
+      - penny_stocks
+      - illiquid_stocks
+  robinhood_place_crypto_order:
+    allowed_only_when:
+      - mode_is_live_testing
+      - live_testing_rules_enabled
+      - crypto_live_testing_enabled
+      - risk_manager_approved
+      - review_crypto_order_completed
+      - exact_user_approval_phrase_received
+      - order_notional_lte_settled_cash
+      - no_margin_or_borrow_required
+      - spot_crypto_only
+    blocked_for:
+      - crypto_shorts
+      - leverage
+      - futures
+      - perpetuals
+      - defi_yield
+
+allowed_robinhood_setup_tools:
+  - robinhood_browser_login
+  - robinhood_check_session
+
+allowed_robinhood_read_tools:
+  - get_accounts
+  - get_portfolio
+  - get_equity_positions
+  - get_equity_quotes
+  - get_equity_historicals
+  - get_equity_tradability
+  - get_equity_orders
+  - get_watchlists
+  - get_watchlist_items
+  - search
+  - robinhood_get_crypto
+  - robinhood_get_orders
+  - robinhood_get_account
+  - robinhood_check_session
+
+allowed_robinhood_review_tools:
+  - review_equity_order
+  - robinhood_get_crypto
+
+crypto_live_testing_rules:
+  enabled: true
+  spot_only: true
+  cash_only: true
+  max_trade_dollars: 10
+  max_position_percent_of_portfolio: 20
+  allowed_assets:
+    - BTC
+    - ETH
+    - SOL
+    - XRP
+    - ADA
+    - DOGE
+  allow_crypto_shorts: false
+  allow_leverage: false
+  allow_futures: false
+  allow_perpetuals: false
+  allow_defi_yield: false
+  require_order_review_before_order: true
+  execution_tool_policy: robinhood_place_crypto_order_with_approval
+  review_tool: robinhood_get_crypto
+
+research_requirements:
+  require_thesis: true
+  require_catalyst: true
+  require_evidence: true
+  require_bull_case: true
+  require_bear_case: true
+  require_invalidation_condition: true
+  require_risk_summary: true
+  require_reason_not_to_trade: true
+  require_source_quality_rating: true
+
+political_catalyst_rules:
+  public_sources_only: true
+  no_private_personal_data: true
+  no_hacked_or_leaked_info: true
+  no_harassment: true
+  no_gossip_based_trades: true
+  catalyst_must_affect_sector_or_company: true
+
+paper_trading_rules:
+  minimum_paper_trading_days_before_live_testing: 30
+  require_trade_journal: true
+  require_result_tracking: true
+  require_lessons_learned: true
+  allow_equity_short_tests: true
+  equity_short_tests_live_blocked: true
+
+live_testing_rules:
+  enabled: true
+  max_trade_dollars: 10
+  cash_only: true
+  settled_cash_only: false
+  allow_instant_deposits: true
+  use_margin_buying_power: false
+  reject_if_order_notional_exceeds_settled_cash: false
+  reject_if_order_requires_margin_or_borrow: true
+  require_exact_user_approval_phrase: true
+  approval_phrase: "I approve"
+  require_risk_manager_approval: true
+  require_order_review_before_order: true
+
+autonomous_trading_rules:
+  enabled: false
+  minimum_days_before_considering: 60
+  require_user_policy_update: true
+  require_emergency_stop: true
+  require_positive_journal_review: true
+
+emergency_stop_rules:
+  enabled: false
+  file: policies/emergency_stop.yaml
+  block_order_review_when_triggered: true
+  block_order_placement_when_triggered: true
+  block_order_cancellation_when_triggered: true

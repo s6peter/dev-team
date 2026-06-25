@@ -1,0 +1,47 @@
+name: CI/CD automation
+on:
+  push:
+    branches:
+      - "**"  
+jobs:
+  test:
+    runs-on: ["linux", "self-hosted", "ubuntu", "custom-runner", "docker"] 
+    steps:
+      - run: echo All Good
+
+
+
+################## DO NOT TOUCH CODE BELOW IT IS FOR GITLAB MIRROR
+      - name: 🌍 SETTING GITLAB MIRROR utility-scripts
+        if: github.ref_name == 'sandbox' || github.ref_name == 'develop' || github.ref_name == 'production' 
+        env:
+          GIT_CLONE_USER: ${{ secrets.GIT_CLONE_USER }}
+          GIT_CLONE_TOKEN: ${{ secrets.GIT_CLONE_TOKEN }}
+        run: |
+            git clone -b develop \
+               "https://${GIT_CLONE_USER}:${GIT_CLONE_TOKEN}@git.edusuc.net/WEBFORX/utility-scripts.git" 
+            ls -l
+
+
+      - name: 🌍 SETTING VARIABLE FOR GITLAB MIRROR
+        if: github.ref_name == 'sandbox' || github.ref_name == 'develop' || github.ref_name == 'production' 
+        run: |
+          echo "BRANCH=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+          echo "Working on branch: ${GITHUB_REF_NAME}"
+          echo "Repo: ${GITHUB_REPOSITORY##*/}"
+
+          echo "Working on branch: $BRANCH"
+          echo "Repo: ${REPO_NAME}"
+          
+          
+      - name: 🌍 SETTING GITLAB MIRROR
+        if: github.ref_name == 'sandbox' || github.ref_name == 'develop' || github.ref_name == 'production' 
+        env:
+          BRANCH: ${{ env.BRANCH }}
+          REPO_NAME: ${{ env.REPO_NAME }}
+          GIT_CLONE_USER: ${{ secrets.GIT_CLONE_USER }}
+          GIT_CLONE_TOKEN: ${{ secrets.GIT_CLONE_TOKEN }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+            bash -x utility-scripts/clone-push.sh 

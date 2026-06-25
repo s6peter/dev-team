@@ -1,0 +1,67 @@
+---
+- name: Harden GitLab POC host
+  hosts: gitlab
+  become: true
+
+  tasks:
+    - name: Ensure security updates and operational tools are installed
+      ansible.builtin.apt:
+        name:
+          - unattended-upgrades
+          - auditd
+          - fail2ban
+          - amazon-cloudwatch-agent
+          - jq
+          - unzip
+        state: present
+        update_cache: true
+
+    - name: Enable unattended security updates
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+
+    - name: Disable root SSH login
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin no"
+      notify: Restart ssh
+
+    - name: Disable password SSH authentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+      notify: Restart ssh
+
+    - name: Enable auditd
+      ansible.builtin.service:
+        name: auditd
+        state: started
+        enabled: true
+
+    - name: Enable fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: started
+        enabled: true
+
+    - name: Confirm GitLab container status
+      ansible.builtin.command: docker ps --filter name=gitlab --format "{{'{{'}}.Status{{'}}'}}"
+      changed_when: false
+      register: gitlab_container_status
+
+    - name: Show GitLab container status
+      ansible.builtin.debug:
+        var: gitlab_container_status.stdout
+
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+

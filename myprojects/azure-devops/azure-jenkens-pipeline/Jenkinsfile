@@ -1,0 +1,44 @@
+
+
+    // environment {
+    //     // Store these in Jenkins Credentials and inject as env vars securely
+    //     SNYK_TOKEN = credentials('stackhawk-api-key')
+    //     HAWK_API_KEY = credentials('stackhawk-api-key-real')
+    // }
+pipeline {
+    agent any
+
+    environment {
+        SNYK_TOKEN = credentials('stackhawk-api-key')
+    }
+
+    triggers {
+        pollSCM('* * * * *') // Optional if webhook fails
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                // This works with Azure DevOps webhook (uses repo info passed from webhook)
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Snyk Security Scan') {
+            steps {
+                sh '''
+                  npm install -g snyk
+                  snyk auth $SNYK_TOKEN
+                  snyk test --all-projects || true
+                  snyk monitor
+                '''
+            }
+        }
+    }
+}

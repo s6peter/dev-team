@@ -1,0 +1,17 @@
+include:
+  - project: platform-engineering/ci-templates
+    file: /base.gitlab-ci.yml
+  - project: platform-engineering/ci-templates
+    file: /python-test.gitlab-ci.yml
+  - project: platform-engineering/ci-templates
+    file: /sonarqube.gitlab-ci.yml
+  - project: platform-engineering/ci-templates
+    file: /security.gitlab-ci.yml
+  - project: platform-engineering/ci-templates
+    file: /docker-build.gitlab-ci.yml
+  - project: platform-engineering/ci-templates
+    file: /deploy-gitops.gitlab-ci.yml
+
+variables:
+  ENVIRONMENT: dev
+

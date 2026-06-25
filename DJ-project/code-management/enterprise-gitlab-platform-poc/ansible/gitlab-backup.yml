@@ -1,0 +1,24 @@
+---
+- name: Trigger GitLab backup and sync to S3
+  hosts: gitlab
+  become: true
+
+  tasks:
+    - name: Run GitLab application backup
+      ansible.builtin.command: docker exec gitlab gitlab-backup create STRATEGY=copy
+      changed_when: true
+
+    - name: Sync GitLab backups to S3
+      ansible.builtin.command: >
+        aws s3 sync /opt/boa-platform/gitlab/data/backups
+        s3://{{ backup_bucket }}/gitlab/backups
+        --region {{ aws_region }}
+      changed_when: true
+
+    - name: Sync GitLab configuration and secrets to S3
+      ansible.builtin.command: >
+        aws s3 sync /opt/boa-platform/gitlab/config
+        s3://{{ backup_bucket }}/gitlab/config
+        --region {{ aws_region }}
+      changed_when: true
+

@@ -1,0 +1,34 @@
+service: my-serverless-api
+
+provider:
+  name: aws
+  runtime: python3.8
+
+functions:
+  createItem:
+    handler: handler.create_item
+    events:
+      - http:
+          path: create
+          method: post
+
+resources:
+  Resources:
+    MyTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: MyTable
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+
+#How do you define resources like API Gateway or DynamoDB within the Serverless Framework configuration file (serverless.yml)?
+
+#This question evaluates your understanding of defining and configuring AWS resources in the serverless.yml file.

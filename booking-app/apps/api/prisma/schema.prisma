@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  BOOKING_CANCELLATION
+  BOOKING_REMINDER
+  PAYMENT_CONFIRMATION
+}
+
+enum WaitlistStatus {
+  OPEN
+  CONTACTED
+  BOOKED
+  CLOSED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(CUSTOMER)
+  firstName    String
+  lastName     String
+  phone        String?
+  customer     Customer?
+  staffProfile StaffProfile?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  userId    String?   @unique
+  user      User?     @relation(fields: [userId], references: [id])
+  firstName String
+  lastName  String
+  email     String    @unique
+  phone     String
+  notes     String?
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model StaffProfile {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id])
+  displayName     String
+  bio             String?
+  isActive        Boolean         @default(true)
+  bookings        Booking[]
+  availabilities  Availability[]
+  blockedTimes    BlockedTime[]
+  waitlistEntries WaitlistEntry[]
+}
+
+model Service {
+  id              String          @id @default(cuid())
+  name            String
+  groupName       String?
+  optionName      String?
+  size            String?
+  length          String?
+  description     String
+  price           Decimal         @db.Decimal(10, 2)
+  depositAmount   Decimal         @db.Decimal(10, 2)
+  durationMinutes Int
+  category        String
+  isActive        Boolean         @default(true)
+  bookings        Booking[]
+  waitlistEntries WaitlistEntry[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Booking {
+  id                 String         @id @default(cuid())
+  serviceId          String
+  service            Service        @relation(fields: [serviceId], references: [id])
+  staffId            String
+  staff              StaffProfile   @relation(fields: [staffId], references: [id])
+  customerId         String
+  customer           Customer       @relation(fields: [customerId], references: [id])
+  startTime          DateTime
+  endTime            DateTime
+  status             BookingStatus  @default(PENDING_PAYMENT)
+  notes              String?
+  internalNotes      String?
+  cancellationReason String?
+  recurrenceGroupId  String?
+  allDay             Boolean        @default(false)
+  cardHeldForNoShow  Boolean        @default(false)
+  intakeAnswers      Json?
+  payment            Payment?
+  notifications      Notification[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([staffId, startTime])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  bookingId             String        @unique
+  booking               Booking       @relation(fields: [bookingId], references: [id])
+  stripePaymentIntentId String?
+  depositAmount         Decimal       @db.Decimal(10, 2)
+  taxAmount             Decimal       @default(0) @db.Decimal(10, 2)
+  totalAmount           Decimal       @db.Decimal(10, 2)
+  status                PaymentStatus @default(UNPAID)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+}
+
+model Availability {
+  id            String       @id @default(cuid())
+  staffId       String
+  staff         StaffProfile @relation(fields: [staffId], references: [id])
+  dayOfWeek     Int
+  startTime     String
+  endTime       String
+  breakStart    String?
+  breakEnd      String?
+  bufferMinutes Int          @default(15)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model BlockedTime {
+  id        String       @id @default(cuid())
+  staffId   String
+  staff     StaffProfile @relation(fields: [staffId], references: [id])
+  startTime DateTime
+  endTime   DateTime
+  reason    String?
+  createdAt DateTime     @default(now())
+}
+
+model BusinessSettings {
+  id                          String   @id @default(cuid())
+  businessName                String
+  businessPhone               String
+  businessEmail               String
+  address                     String
+  cancellationPolicy          String
+  depositPolicy               String
+  bookingNoticeMinimumHours   Int      @default(24)
+  maxDaysAhead                Int      @default(60)
+  depositTaxRate              Decimal  @default(0.0825) @db.Decimal(5, 4)
+  paymentPolicy               String   @default("REQUIRE_DEPOSIT")
+  noShowFeeType               String   @default("FLAT")
+  noShowFeeAmount             Decimal  @default(30) @db.Decimal(10, 2)
+  dailyAppointmentLimit       Int?
+  allowCustomerSelfCancel     Boolean  @default(true)
+  allowCustomerSelfReschedule Boolean  @default(true)
+  enableWaitlist              Boolean  @default(true)
+  customBookingQuestions      Json?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+}
+
+model WaitlistEntry {
+  id            String         @id @default(cuid())
+  serviceId     String
+  service       Service        @relation(fields: [serviceId], references: [id])
+  staffId       String?
+  staff         StaffProfile?  @relation(fields: [staffId], references: [id])
+  firstName     String
+  lastName      String
+  email         String
+  phone         String
+  preferredDate DateTime?
+  preferredTime String?
+  notes         String?
+  status        WaitlistStatus @default(OPEN)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  bookingId String?
+  booking   Booking?         @relation(fields: [bookingId], references: [id])
+  type      NotificationType
+  recipient String
+  message   String
+  createdAt DateTime         @default(now())
+}

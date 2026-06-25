@@ -1,0 +1,30 @@
+# Production example. This creates significant AWS cost.
+aws_region   = "us-east-1"
+project_name = "gitlab-cloud-native"
+environment  = "prod"
+
+create_vpc        = true
+create_eks        = true
+create_rds        = true
+create_redis      = true
+create_s3_buckets = true
+create_waf        = true
+
+gitlab_domain = "gitlab.example.com"
+admin_cidrs   = ["10.0.0.0/8"]
+
+az_count = 3
+
+gitlab_app_min_size     = 2
+gitlab_app_desired_size = 3
+gitlab_app_max_size     = 6
+runner_min_size         = 0
+runner_desired_size     = 1
+runner_max_size         = 10
+node_instance_types     = ["m6i.large", "m6a.large"]
+
+db_instance_class             = "db.m6g.large"
+db_allocated_storage          = 200
+db_multi_az                   = true
+redis_node_type               = "cache.m6g.large"
+redis_replicas_per_node_group = 1

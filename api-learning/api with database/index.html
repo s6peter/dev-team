@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FastAPI Practice</title>
+</head>
+<body>
+    <h2>Register</h2>
+    <form id="register-form">
+        Name: <input type="text" name="name" required><br>
+        Email: <input type="email" name="email" required><br>
+        Password: <input type="password" name="password" required><br>
+        <button type="submit">Register</button>
+    </form>
+
+    <h2>Login</h2>
+    <form id="login-form">
+        Email: <input type="email" name="email" required><br>
+        Password: <input type="password" name="password" required><br>
+        <button type="submit">Login</button>
+    </form>
+
+    <h2>Dashboard</h2>
+    <button id="get-users">Fetch Users</button>
+    <pre id="output"></pre>
+
+<script>
+const API_URL = "http://localhost:8000";
+
+document.getElementById("register-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const res = await fetch(`${API_URL}/register`, { method: "POST", body: formData });
+    const data = await res.json();
+    alert(JSON.stringify(data));
+});
+
+document.getElementById("login-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const res = await fetch(`${API_URL}/login`, { method: "POST", body: formData });
+    const data = await res.json();
+    if (data.access_token) {
+        localStorage.setItem("jwt_token", data.access_token);
+        alert("Logged in successfully!");
+    } else {
+        alert(JSON.stringify(data));
+    }
+});
+
+document.getElementById("get-users").addEventListener("click", async () => {
+    const token = localStorage.getItem("jwt_token");
+    if (!token) return alert("Please login first.");
+    const res = await fetch(`${API_URL}/users`, { headers: { "Authorization": "Bearer " + token }});
+    const data = await res.json();
+    document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+});
+</script>
+</body>
+</html>

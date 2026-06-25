@@ -1,0 +1,13 @@
+community:
+  enabled: true
+postgresql:
+  enabled: true
+monitoringPasscode: "change-me"
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 1
+    memory: 3Gi
+

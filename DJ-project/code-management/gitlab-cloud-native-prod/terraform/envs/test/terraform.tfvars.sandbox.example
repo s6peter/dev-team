@@ -1,0 +1,33 @@
+# Paid sandbox mode. This creates billable AWS resources.
+# Use only in a short-lived test account and destroy it when finished.
+aws_region   = "us-east-1"
+project_name = "gitlab-cloud-native"
+environment  = "test"
+
+create_vpc        = true
+create_eks        = true
+create_rds        = true
+create_redis      = true
+create_s3_buckets = true
+create_waf        = false
+
+gitlab_domain = "gitlab.example.com"
+admin_cidrs   = ["203.0.113.10/32"]
+
+az_count = 2
+
+# Keep node groups scaled down for cost-aware testing.
+gitlab_app_min_size     = 0
+gitlab_app_desired_size = 0
+gitlab_app_max_size     = 2
+runner_min_size         = 0
+runner_desired_size     = 0
+runner_max_size         = 2
+node_instance_types     = ["t3.large"]
+
+# Lowest practical managed-service sizes for tests. Still billable.
+db_instance_class            = "db.t4g.micro"
+db_allocated_storage         = 20
+db_multi_az                  = false
+redis_node_type              = "cache.t4g.micro"
+redis_replicas_per_node_group = 0

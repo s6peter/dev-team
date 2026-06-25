@@ -1,0 +1,27 @@
+aws_region          = "us-east-1"
+project_name        = "boa-gitlab-poc"
+environment         = "dev"
+admin_cidr          = "CHANGE-ME/32"
+gitlab_instance_type = "t3.xlarge"
+gitlab_volume_size  = 120
+
+# Leave blank for a quick HTTP POC using the EC2 public DNS.
+# For a cleaner demo, point a DNS record at the EC2 public IP and set this.
+gitlab_external_url = ""
+
+# Optional. Prefer SSM Session Manager for the POC; use SSH only if needed.
+ssh_public_key = ""
+
+# Set false to deploy only GitLab and the backup bucket.
+enable_lab_services = true
+
+# EKS adds hourly control-plane cost. Enable only when demonstrating K8s runners/GitOps.
+enable_eks             = false
+eks_node_instance_type = "t3.small"
+
+tags = {
+  Owner       = "platform-engineering"
+  CostCenter  = "poc"
+  Description = "Bank of America enterprise GitLab software factory proof of concept"
+}
+

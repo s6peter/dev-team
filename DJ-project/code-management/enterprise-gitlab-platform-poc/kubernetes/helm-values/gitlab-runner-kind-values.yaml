@@ -1,0 +1,35 @@
+gitlabUrl: "http://ec2-98-81-54-40.compute-1.amazonaws.com"
+runnerToken: "CHANGE-ME"
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: gitlab-runner-kind
+
+metrics:
+  enabled: true
+
+runners:
+  name: boa-kind-kubernetes-runner
+  tags: "kind,kubernetes,linux,dev"
+  executor: kubernetes
+  runUntagged: false
+  locked: false
+  config: |
+    [[runners]]
+      name = "boa-kind-kubernetes-runner"
+      request_concurrency = 2
+      [runners.kubernetes]
+        namespace = "gitlab-runner"
+        image = "ubuntu:22.04"
+        poll_timeout = 180
+        cpu_request = "100m"
+        memory_request = "128Mi"
+        cpu_limit = "1"
+        memory_limit = "1Gi"
+        helper_cpu_request = "50m"
+        helper_memory_request = "128Mi"
+        service_cpu_request = "50m"
+        service_memory_request = "128Mi"

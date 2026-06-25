@@ -1,0 +1,8 @@
+[gitlab]
+boa-gitlab ansible_host=CHANGE_ME_PUBLIC_DNS ansible_user=ubuntu
+
+[gitlab:vars]
+ansible_python_interpreter=/usr/bin/python3
+backup_bucket=CHANGE_ME_BACKUP_BUCKET
+aws_region=us-east-1
+

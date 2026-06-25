@@ -1,0 +1,49 @@
+# GitLab Runner Helm values for EKS Kubernetes executor.
+# Replace CHANGE_ME values before installing.
+
+gitlabUrl: https://gitlab.CHANGE_ME_example.com
+runnerToken: CHANGE_ME_RUNNER_AUTHENTICATION_TOKEN
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: gitlab-runner
+
+metrics:
+  enabled: true
+
+concurrent: 20
+checkInterval: 3
+
+runners:
+  name: gitlab-eks-runner
+  tags: "kubernetes,linux,build"
+  executor: kubernetes
+  runUntagged: false
+  locked: false
+  config: |
+    [[runners]]
+      request_concurrency = 4
+      [runners.kubernetes]
+        namespace = "gitlab-runner"
+        image = "ubuntu:22.04"
+        poll_timeout = 180
+        service_account = "gitlab-runner"
+        cpu_request = "250m"
+        memory_request = "512Mi"
+        cpu_limit = "2"
+        memory_limit = "4Gi"
+        helper_cpu_request = "100m"
+        helper_memory_request = "256Mi"
+        node_selector = { "workload" = "gitlab-runner" }
+        node_tolerations = { "workload=gitlab-runner" = "NoSchedule" }
+      [runners.cache]
+        Type = "s3"
+        Shared = true
+        [runners.cache.s3]
+          ServerAddress = "s3.amazonaws.com"
+          BucketName = "CHANGE_ME_RUNNER_CACHE_BUCKET"
+          BucketLocation = "us-east-1"
+          Insecure = false

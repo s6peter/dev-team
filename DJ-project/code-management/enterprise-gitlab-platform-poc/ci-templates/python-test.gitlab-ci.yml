@@ -1,0 +1,14 @@
+python:test:
+  image: python:3.12-slim
+  stage: test
+  extends: .rules-merge-request-or-main
+  before_script:
+    - pip install --no-cache-dir -r requirements.txt
+    - pip install --no-cache-dir pytest
+  script:
+    - pytest -q --junitxml=pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: pytest-report.xml
+

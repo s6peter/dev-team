@@ -1,0 +1,11 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+backend.hcl
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+inventory.ini

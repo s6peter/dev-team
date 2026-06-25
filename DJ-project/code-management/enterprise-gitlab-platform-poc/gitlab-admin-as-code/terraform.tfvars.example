@@ -1,0 +1,4 @@
+gitlab_base_url = "http://CHANGE-ME/api/v4/"
+gitlab_token    = "CHANGE-ME"
+default_branch  = "main"
+

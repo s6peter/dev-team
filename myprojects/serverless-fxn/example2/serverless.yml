@@ -1,0 +1,21 @@
+# Welcome to Serverless!
+
+
+service: example2
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.9
+  stage: testing
+  region: us-west-1
+  environment:
+    variable1: "value1"
+
+
+
+functions:
+  hello:
+    handler: handler.hello
+    url: true

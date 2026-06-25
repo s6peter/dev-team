@@ -1,0 +1,18 @@
+ops:cleanup-runner-pods:
+  image: bitnami/kubectl:latest
+  stage: ops
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - kubectl delete pod -n gitlab-runner --field-selector=status.phase=Failed || true
+
+ops:argocd-sync:
+  image: argoproj/argocd:latest
+  stage: ops
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - argocd app sync sample-api-dev --grpc-web
+

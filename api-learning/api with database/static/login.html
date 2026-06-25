@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h2>Login</h2>
+    <form id="login-form">
+        <label>Email:</label><br>
+        <input type="email" name="email" required><br>
+        <label>Password:</label><br>
+        <input type="password" name="password" required><br><br>
+        <button type="submit">Login</button>
+    </form>
+
+    <p>Don't have an account? <a href="/register-page">Register</a></p>
+
+    <script>
+    const form = document.getElementById("login-form");
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const data = new FormData(form);
+        const payload = {
+            email: data.get("email"),
+            password: data.get("password")
+        };
+
+        const response = await fetch("/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams(payload)
+        });
+
+        const result = await response.json();
+        if (result.access_token) {
+            localStorage.setItem("jwt_token", result.access_token);
+            window.location.href = "/dashboard"; // New protected page
+        } else {
+            alert(result.error || "Login failed");
+        }
+    });
+    </script>
+</body>
+</html>

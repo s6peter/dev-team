@@ -1,0 +1,35 @@
+gitlabUrl: "http://CHANGE-ME"
+runnerToken: "CHANGE-ME"
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: gitlab-runner
+
+metrics:
+  enabled: true
+
+runners:
+  name: boa-eks-kubernetes-runner
+  tags: "eks,kubernetes,terraform,docker"
+  executor: kubernetes
+  runUntagged: false
+  locked: false
+  config: |
+    [[runners]]
+      request_concurrency = 4
+      [runners.kubernetes]
+        namespace = "gitlab-runner"
+        image = "ubuntu:22.04"
+        poll_timeout = 180
+        cpu_request = "250m"
+        memory_request = "256Mi"
+        cpu_limit = "2"
+        memory_limit = "2Gi"
+        helper_cpu_request = "100m"
+        helper_memory_request = "128Mi"
+        service_cpu_request = "100m"
+        service_memory_request = "128Mi"
+

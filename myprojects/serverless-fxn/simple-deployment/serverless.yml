@@ -1,0 +1,23 @@
+service: helloer-service
+
+#frameworkVersion: '>=1.5.0 <2.0.0'
+frameworkVersion: '3'
+
+
+provider: 
+  name: aws
+  runtime: python3.8
+  stage: dev-env
+  region: eu-central-1
+
+
+
+functions:
+  helloer:
+    handler: helloer.helloer_handler
+    events:
+    - http:
+        path: /hello
+        method: get
+        cors: false 
+

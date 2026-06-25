@@ -1,0 +1,136 @@
+# OpenClaw Gateway Configuration — Trading Lab
+#
+# This gateway maps webhook/Discord commands to the allowlisted
+# command_runner.py script. It enforces a strict allowlist and
+# provides audit logging. No write access to money or trading
+# execution is granted through this gateway.
+
+gateway:
+  name: trading-lab-gateway
+  version: "1.0.0"
+  description: >
+    Gateway for trading-agent-lab research and paper-trade operations.
+    Maps incoming commands to the allowlisted command_runner.py.
+
+service:
+  id: trading-lab
+  name: Trading Lab Operations
+  script: scripts/command_runner.py
+  invoke: "python3 scripts/command_runner.py --command \"{command}\""
+  working_directory: /home/persoba/v-projects/Trading-assistant/trading-agent-lab
+
+  # ── Allowed commands ──────────────────────────────────────────────────
+  # Only these exact command strings are forwarded to the runner.
+  allowlist:
+    - "generate market open brief"
+    - "generate midday brief"
+    - "generate market close brief"
+    - "run paper trade review"
+    - "show active paper trades"
+    - "show performance summary"
+    - "show political catalysts"
+    - "show daily brief"
+    - "show risk status"
+    - "journal search"
+    - "help"
+
+  # ── Blocked route patterns (regex) ────────────────────────────────────
+  # These are rejected before reaching the runner.
+  blocked_patterns:
+    - "place"
+    - "cancel"
+    - "order"
+    - "trade"
+    - "approve"
+    - "live"
+    - "auto"
+    - "margin"
+    - "short"
+    - "option"
+
+endpoints:
+  # Webhook endpoint — accepts JSON { "command": "..." }
+  webhook:
+    method: POST
+    path: /api/v1/command
+    content_type: application/json
+    schema:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          description: "Command string to execute"
+    response_format:
+      type: object
+      properties:
+        status: { type: string, enum: [allowed, blocked, error] }
+        command: { type: string }
+        output: { type: string }
+
+  # Health check
+  health:
+    method: GET
+    path: /api/v1/health
+    response:
+      status: ok
+      service: trading-lab
+      version: "1.0.0"
+
+logging:
+  level: info
+  file: logs/openclaw_gateway.log
+  format: json
+  audit:
+    log_all_requests: true
+    log_blocked_attempts: true
+    log_allowed_commands: true
+
+security:
+  # ── Least privilege ───────────────────────────────────────────────────
+  # The gateway process runs as a non-root user with read-only filesystem
+  # access except for logs/ and signals/ (write needed for brief generation).
+  run_as_user: nobody
+  read_only_paths:
+    - policies/
+    - config/
+    - journal/
+    - scripts/
+    - .agents/
+  write_paths:
+    - logs/
+    - signals/
+  no_access_paths: []
+
+  # ── No money, no execution ───────────────────────────────────────────
+  # The gateway never has credentials for Robinhood write tools.
+  # No API keys for place_equity_order, cancel_equity_order, etc.
+  # This gateway is for research and paper-trading only.
+  blocked_tools:
+    - place_equity_order
+    - cancel_equity_order
+    - review_equity_order
+    - place_option_order
+    - cancel_option_order
+
+  # ── Rate limiting ─────────────────────────────────────────────────────
+  rate_limit:
+    max_requests_per_minute: 30
+    burst: 10
+
+  # ── CORS ──────────────────────────────────────────────────────────────
+  cors:
+    allowed_origins:
+      - http://localhost:3000
+    allowed_methods:
+      - POST
+      - GET
+
+  # ── Audit notes ──────────────────────────────────────────────────────
+  notes:
+    - "This gateway enforces an allowlist. It does not execute trades."
+    - "All commands are logged to logs/command_runner.log with timestamps."
+    - "Blocked keywords are rejected before the runner is invoked."
+    - "The gateway has no access to Robinhood write credentials."
+    - "Designed for Phase 1 (research) and Phase 2 (paper trading) only."
+    - "For Phase 3+, the risk_rules.yaml must be updated and this gateway redeployed."
