@@ -120,31 +120,28 @@ export default function ServicesPage() {
                       {service.service_tiers && service.service_tiers.length > 0 && (
                         <div className="mt-6">
                           <h3 className="text-sm font-medium mb-3">
-                            Pricing Options ({service.service_tiers.length} configurations):
+                            Available Options:
                           </h3>
-                          <div className="max-h-64 overflow-y-auto border rounded-lg">
-                            <table className="w-full text-sm">
-                              <thead className="sticky top-0 bg-background border-b">
-                                <tr>
-                                  <th className="text-left p-3 font-medium">Size / Length</th>
-                                  <th className="text-right p-3 font-medium">Price</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {service.service_tiers.map((tier) => (
-                                  <tr key={tier.id} className="border-b last:border-b-0 hover:bg-accent/50">
-                                    <td className="p-3">{tier.name}</td>
-                                    <td className="p-3 text-right font-medium text-primary">
-                                      {formatCurrency(service.base_price + tier.price_addon)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {service.service_tiers.map((tier) => (
+                              <div
+                                key={tier.id}
+                                className="border rounded-lg p-3"
+                              >
+                                <p className="font-medium">{tier.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {tier.description}
+                                </p>
+                                <p className="text-sm text-primary mt-1">
+                                  {tier.price_addon > 0
+                                    ? `+${formatCurrency(tier.price_addon)}`
+                                    : tier.price_addon < 0
+                                    ? `${formatCurrency(tier.price_addon)}`
+                                    : "Base price"}
+                                </p>
+                              </div>
+                            ))}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Deposit: {service.deposit_percent}% of total. Balance paid in person.
-                          </p>
                         </div>
                       )}
 

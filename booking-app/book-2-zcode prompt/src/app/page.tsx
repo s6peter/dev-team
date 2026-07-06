@@ -17,38 +17,38 @@ const services = [
   {
     name: "Box Braids",
     description: "Classic box braids in various sizes and lengths",
-    price: "From $160",
-    duration: "3-5 hours",
+    price: "$210 - $230",
+    duration: "3-4 hours",
+  },
+  {
+    name: "Cornrows",
+    description: "Traditional cornrows in various patterns",
+    price: "From $100",
+    duration: "2-3 hours",
   },
   {
     name: "Knotless Braids",
     description: "Gentle knotless braids for a natural look",
-    price: "From $130",
-    duration: "3-5 hours",
-  },
-  {
-    name: "BOHO Knotless",
-    description: "Knotless braids with boho curls",
-    price: "From $150",
-    duration: "3-5 hours",
-  },
-  {
-    name: "Cornrows",
-    description: "Traditional cornrows, feed-ins, tribal braids, and lemonade styles",
-    price: "From $60",
-    duration: "2-4 hours",
-  },
-  {
-    name: "Twists",
-    description: "Havana, Senegalese, Passion, or Island twists",
-    price: "From $140",
-    duration: "3-5 hours",
+    price: "$230+",
+    duration: "4-5 hours",
   },
   {
     name: "Crochet Braids",
-    description: "Crochet installs with various bases and hair textures",
+    description: "Quick crochet install with various hair textures",
     price: "From $120",
-    duration: "2-4 hours",
+    duration: "2-3 hours",
+  },
+  {
+    name: "Twists",
+    description: "Senegalese, Havana, or rope twists in various sizes",
+    price: "From $140",
+    duration: "3-4 hours",
+  },
+  {
+    name: "Passion Twists",
+    description: "Trendy passion twists for a boho look",
+    price: "From $180",
+    duration: "3-4 hours",
   },
 ];
 

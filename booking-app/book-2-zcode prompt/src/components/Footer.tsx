@@ -55,14 +55,6 @@ export function Footer() {
                   </li>
                   <li>
                     <Link
-                      href="/services#knotless-braids"
-                      className="text-sm leading-6 text-muted-foreground hover:text-primary"
-                    >
-                      Knotless Braids
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
                       href="/services#cornrows"
                       className="text-sm leading-6 text-muted-foreground hover:text-primary"
                     >
@@ -71,18 +63,26 @@ export function Footer() {
                   </li>
                   <li>
                     <Link
-                      href="/services#twists"
+                      href="/services#knotless-braids"
                       className="text-sm leading-6 text-muted-foreground hover:text-primary"
                     >
-                      Twists
+                      Knotless Braids
                     </Link>
                   </li>
                   <li>
                     <Link
-                      href="/services#crochet-braids"
+                      href="/services#crochet"
                       className="text-sm leading-6 text-muted-foreground hover:text-primary"
                     >
                       Crochet Braids
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/services#twists"
+                      className="text-sm leading-6 text-muted-foreground hover:text-primary"
+                    >
+                      Twists
                     </Link>
                   </li>
                 </ul>
