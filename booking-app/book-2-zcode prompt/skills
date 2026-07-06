@@ -1,0 +1,40 @@
+Braiding Business Booking Website — Implementation Plan
+Locked decisions
+Booking flow: client picks slot → appointment is pending + slot held → you confirm or decline; decline auto-refunds deposit
+Payments: deposit charged online with tax; balance tracked, paid in-person without tax
+Architecture: solo now, but data model keyed by stylist_id so adding stylists is data-only later
+Reminders: email (Resend) + SMS (Twilio), confirmation + 24h + 2h before
+Content: pulled from your existing website + booking page + Google Maps listing
+Tech stack
+Next.js 14 (App Router) + TypeScript + Tailwind CSS
+Supabase (Postgres + Auth + Storage)
+Stripe (deposits + refunds + webhooks)
+Resend (email) + Twilio (SMS)
+Vercel (hosting + cron for reminders)
+Data model (key tables)
+stylists · services (+service_tiers for size/length add-ons) · availability (weekly recurring) · availability_overrides (time off/travel) · clients · appointments (status: pending→confirmed/declined/completed/no_show/cancelled) · intake_responses · payments (deposit/balance/tip) · reviews · portfolio_items · messages · slot_holds (TTL auto-release via DB trigger)
+
+Tax math: online deposit = deposit% × (price + tax); in-person balance_due = price × (1 − deposit%) with no tax. Tax rate stored per service/region.
+
+Features to build (full set)
+Storefront: landing page (hero, value prop, CTA), services catalog (style, price range, duration, prep/care notes, reference photos), portfolio gallery (filter by style/length, before-after), about artist, testimonials/reviews, FAQ, location + embedded Google Map + hours, contact form, social/Instagram feed.
+
+Booking engine: service+tier selection → live availability calendar (recurring hours + overrides + buffer, conflict-safe, concurrency locking) → client intake form with inspiration photo upload → deposit checkout (tax included) → appointment created as pending + slot hold → you confirm or decline (decline auto-refunds).
+
+Client experience: optional account (auto-created on email), view upcoming + past appointments, reschedule/cancel within policy window, booking history.
+
+Admin dashboard (you): calendar (day/week/agenda, drag-to-reschedule, color-coded by status), pending-approval queue, booking management, availability editor (hours + overrides/blackouts), services manager (styles, tiers, pricing, durations, photos), gallery manager, client CRM (profile, notes, preferences, allergies flagged, lifetime spend, tags like VIP/returning), reviews (moderate + reply + request post-appointment), finance (deposits collected, balances owed, revenue by period, tax-ready CSV export), messaging, analytics (bookings/month, revenue, top styles, utilization, no-show rate, new vs returning).
+
+System: Supabase auth with client + admin roles, transactional email + SMS (confirmation + reminders), Stripe webhooks for payment events, cloud image storage + optimization, SEO (metadata, sitemap, mobile-first responsive), accessibility (WCAG), privacy/cookie policy.
+
+Build order (single pass, sequenced sanely)
+Project scaffold + Supabase schema + RLS policies + design system from your branding
+Storefront pages + pull real content from your links
+Booking engine + slot logic + intake form
+Stripe deposit (with tax) + webhooks + confirm/decline flow
+Admin dashboard + CRM + calendar
+Reminders cron + email/SMS notifications
+Reviews, analytics, finance export
+SEO, accessibility, polish, deploy to Vercel
+
+https://qgbraids.square.site/static/icons/payment-methods/googlepay.svg", "Image 1: QueenG Braids & Essentials": "https://qgbraids.square.site/uploads/b/78791a80-53df-11ef-a602-c50e6563f189/logo_EE079BAD-2163-4AC9-80E2-6FF1A713FA0E.jpeg?width=400", "Imag... Output: webReader_result_summary: [{"text": {"images": {"Image 4: Google Pay": "https://qgbraids.square.site/static/icons/payment-methods/googlepay.svg", "Image 1: QueenG Braids & Essentials": "https://qgbraids.square.site/uploads/b/78791a80-53df-11ef-a602-c50e6563f189/logo_EE079BAD-2163-4AC9-80E2-6FF1A713FA0E.jpeg?width=400", "Imag...
