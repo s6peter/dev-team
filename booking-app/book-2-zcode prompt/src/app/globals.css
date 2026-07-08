@@ -57,3 +57,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Dark theme override for services page */
+.dark-theme {
+  background-color: #0a0a0a !important;
+  color: white !important;
+}
+
+.dark-theme header,
+.dark-theme footer {
+  background-color: #0a0a0a !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark-theme header a,
+.dark-theme footer a {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.dark-theme header a:hover,
+.dark-theme footer a:hover {
+  color: #f472b6 !important;
+}
+
+.dark-theme .card-dark {
+  background-color: #1a1a1a !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
