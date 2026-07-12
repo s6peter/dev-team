@@ -56,7 +56,12 @@ export function Header() {
         </div>
 
         <div className="hidden lg:flex lg:flex-1 lg:justify-end">
-          <Link href="/book">
+          <Link href="/book" onClick={(e) => {
+            if (window.location.pathname === "/book") {
+              e.preventDefault();
+              window.location.href = "/book";
+            }
+          }}>
             <Button className="bg-brand-500 hover:bg-brand-600 text-white">Book Now</Button>
           </Link>
         </div>
@@ -118,7 +123,12 @@ export function Header() {
                 ))}
               </div>
               <div className={`border-t py-6 px-4 ${isDarkPage ? "border-white/10" : "border-border"}`}>
-                <Link href="/book" onClick={() => setMobileMenuOpen(false)}>
+                <Link href="/book" onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (window.location.pathname === "/book") {
+                    window.location.href = "/book";
+                  }
+                }}>
                   <Button className="w-full bg-brand-500 hover:bg-brand-600 text-white">Book Now</Button>
                 </Link>
               </div>

@@ -1,246 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Crown, Sparkles } from "lucide-react";
-
-interface PricingRow {
-  size: string;
-  lengths: { label: string; price: number }[];
-}
-
-interface ServiceCategory {
-  name: string;
-  icon: string;
-  services: {
-    name: string;
-    pricing: PricingRow[];
-    note?: string;
-  }[];
-}
-
-const serviceData: ServiceCategory[] = [
-  {
-    name: "Box Braids",
-    icon: "✨",
-    services: [
-      {
-        name: "Box Braids",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 160 }, { label: "Bra", price: 180 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }, { label: "Butt", price: 240 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 170 }, { label: "Bra", price: 190 }, { label: "Midback", price: 210 }, { label: "Waist", price: 240 }, { label: "Butt", price: 270 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 200 }, { label: "Bra", price: 220 }, { label: "Midback", price: 250 }, { label: "Waist", price: 280 }, { label: "Butt", price: 300 }] },
-          { size: "Extra Small", lengths: [{ label: "Shoulder", price: 280 }, { label: "Bra", price: 300 }, { label: "Midback", price: 330 }, { label: "Waist", price: 350 }, { label: "Butt", price: 400 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Knotless Braids",
-    icon: "💫",
-    services: [
-      {
-        name: "Knotless Braids",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Bra", price: 130 }, { label: "Midback", price: 150 }, { label: "Waist", price: 180 }, { label: "Butt", price: 200 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 160 }, { label: "Bra", price: 180 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }, { label: "Butt", price: 250 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 200 }, { label: "Bra", price: 220 }, { label: "Midback", price: 250 }, { label: "Waist", price: 280 }, { label: "Butt", price: 300 }] },
-          { size: "Extra Small", lengths: [{ label: "Shoulder", price: 260 }, { label: "Bra", price: 300 }, { label: "Midback", price: 330 }, { label: "Waist", price: 380 }, { label: "Butt", price: 420 }] },
-        ],
-      },
-      {
-        name: "BOHO Knotless",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Bra", price: 150 }, { label: "Midback", price: 170 }, { label: "Waist", price: 200 }, { label: "Butt", price: 220 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 200 }, { label: "Midback", price: 220 }, { label: "Waist", price: 240 }, { label: "Butt", price: 270 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 220 }, { label: "Bra", price: 240 }, { label: "Midback", price: 270 }, { label: "Waist", price: 300 }, { label: "Butt", price: 320 }] },
-          { size: "Extra Small", lengths: [{ label: "Shoulder", price: 280 }, { label: "Bra", price: 320 }, { label: "Midback", price: 370 }, { label: "Waist", price: 400 }, { label: "Butt", price: 440 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Twists",
-    icon: "🌸",
-    services: [
-      {
-        name: "Kinky & Havana Twist",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 140 }, { label: "Bra", price: 160 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }, { label: "Butt", price: 230 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 200 }, { label: "Midback", price: 220 }, { label: "Waist", price: 250 }, { label: "Butt", price: 280 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 220 }, { label: "Bra", price: 250 }, { label: "Midback", price: 280 }, { label: "Waist", price: 300 }] },
-        ],
-      },
-      {
-        name: "Senegalese Twist",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 150 }, { label: "Bra", price: 170 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }, { label: "Butt", price: 250 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 200 }, { label: "Midback", price: 220 }, { label: "Waist", price: 250 }, { label: "Butt", price: 280 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 220 }, { label: "Bra", price: 250 }, { label: "Midback", price: 280 }, { label: "Waist", price: 300 }, { label: "Butt", price: 350 }] },
-          { size: "Extra Small", lengths: [{ label: "Shoulder", price: 300 }, { label: "Bra", price: 350 }, { label: "Midback", price: 400 }, { label: "Waist", price: 450 }, { label: "Butt", price: 500 }] },
-        ],
-      },
-      {
-        name: "Passion Twist",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 160 }, { label: "Bra", price: 170 }, { label: "Midback", price: 180 }, { label: "Waist", price: 200 }, { label: "Butt", price: 230 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 200 }, { label: "Midback", price: 220 }, { label: "Waist", price: 250 }, { label: "Butt", price: 280 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 200 }, { label: "Bra", price: 220 }, { label: "Midback", price: 250 }, { label: "Waist", price: 280 }, { label: "Butt", price: 300 }] },
-          { size: "Extra Small", lengths: [{ label: "Shoulder", price: 320 }, { label: "Bra", price: 350 }, { label: "Midback", price: 380 }] },
-        ],
-      },
-      {
-        name: "Island Twist",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 200 }, { label: "Midback", price: 230 }, { label: "Waist", price: 250 }, { label: "Butt", price: 280 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 210 }, { label: "Bra", price: 230 }, { label: "Midback", price: 250 }, { label: "Waist", price: 280 }, { label: "Butt", price: 310 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 250 }, { label: "Bra", price: 280 }, { label: "Midback", price: 310 }, { label: "Waist", price: 330 }, { label: "Butt", price: 380 }] },
-          { size: "Extra Small", lengths: [{ label: "Shoulder", price: 330 }, { label: "Bra", price: 380 }, { label: "Midback", price: 430 }, { label: "Waist", price: 480 }, { label: "Butt", price: 530 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Cornrows",
-    icon: "👑",
-    services: [
-      {
-        name: "Cornrows",
-        pricing: [
-          { size: "Simple style no extension", lengths: [{ label: "Starting at", price: 60 }] },
-          { size: "Simple style with extension", lengths: [{ label: "Starting at", price: 100 }] },
-          { size: "Feed In Ponytail medium bra", lengths: [{ label: "Starting at", price: 140 }] },
-          { size: "Feed In Ponytail small bra", lengths: [{ label: "Starting at", price: 170 }] },
-          { size: "Tribal Braids medium", lengths: [{ label: "Starting at", price: 150 }] },
-          { size: "Tribal Braids small", lengths: [{ label: "Starting at", price: 180 }] },
-          { size: "Lemonade Braids", lengths: [{ label: "Starting at", price: 150 }] },
-        ],
-        note: "Design fee may apply for complex patterns",
-      },
-      {
-        name: "Cornrows - Multi Layer",
-        pricing: [
-          { size: "2 layers medium bra", lengths: [{ label: "Price", price: 220 }] },
-          { size: "2 layers medium midback", lengths: [{ label: "Price", price: 240 }] },
-          { size: "2 layers medium waist", lengths: [{ label: "Price", price: 260 }] },
-          { size: "2 layers small bra", lengths: [{ label: "Price", price: 280 }] },
-          { size: "2 layers small midback", lengths: [{ label: "Price", price: 300 }] },
-          { size: "2 layers small waist", lengths: [{ label: "Price", price: 350 }] },
-          { size: "3 layers medium bra", lengths: [{ label: "Price", price: 300 }] },
-          { size: "3 layers medium midback", lengths: [{ label: "Price", price: 320 }] },
-          { size: "3 layers medium waist", lengths: [{ label: "Price", price: 340 }] },
-          { size: "3 layers small bra", lengths: [{ label: "Price", price: 360 }] },
-          { size: "3 layers small midback", lengths: [{ label: "Price", price: 380 }] },
-          { size: "3 layers waist", lengths: [{ label: "Price", price: 400 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Crochets",
-    icon: "🪝",
-    services: [
-      {
-        name: "Crochets",
-        pricing: [
-          { size: "With cornrow base (pre-looped)", lengths: [{ label: "Price", price: 120 }] },
-          { size: "Cornrow base (not pre-looped)", lengths: [{ label: "Price", price: 150 }] },
-          { size: "With individual braids medium", lengths: [{ label: "Price", price: 200 }] },
-          { size: "With individual braid small", lengths: [{ label: "Price", price: 220 }] },
-          { size: "Butterfly locks", lengths: [{ label: "Price", price: 250 }] },
-          { size: "Soft Locks", lengths: [{ label: "Price", price: 300 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Micro Braids",
-    icon: "💎",
-    services: [
-      {
-        name: "Micro Braids",
-        pricing: [
-          { size: "Medium", lengths: [{ label: "Price", price: 220 }] },
-          { size: "Small", lengths: [{ label: "Price", price: 250 }] },
-          { size: "Extra Small", lengths: [{ label: "Price", price: 300 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Other Services",
-    icon: "💇‍♀️",
-    services: [
-      {
-        name: "Additional Services",
-        pricing: [
-          { size: "Braids Take down", lengths: [{ label: "Starting at", price: 60 }] },
-          { size: "Wig take down", lengths: [{ label: "Starting at", price: 50 }] },
-          { size: "Tree Braids", lengths: [{ label: "Starting at", price: 250 }] },
-          { size: "Natural hair twist", lengths: [{ label: "Starting at", price: 80 }] },
-          { size: "Fulani Braids", lengths: [{ label: "Starting at", price: 200 }] },
-          { size: "Sew Ins", lengths: [{ label: "Starting at", price: 80 }] },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Kids Services",
-    icon: "👶",
-    services: [
-      {
-        name: "Kids Kinky & Havana Twist",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 100 }, { label: "Bra", price: 130 }, { label: "Midback", price: 150 }, { label: "Waist", price: 180 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 150 }, { label: "Bra", price: 180 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 220 }, { label: "Midback", price: 250 }, { label: "Waist", price: 270 }] },
-        ],
-      },
-      {
-        name: "Kids Senegalese Twist",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 100 }, { label: "Bra", price: 130 }, { label: "Midback", price: 150 }, { label: "Waist", price: 180 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 150 }, { label: "Bra", price: 180 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 220 }, { label: "Midback", price: 250 }, { label: "Waist", price: 270 }] },
-        ],
-      },
-      {
-        name: "Kids Box Braids",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 150 }, { label: "Bra", price: 180 }, { label: "Midback", price: 200 }, { label: "Waist", price: 220 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 180 }, { label: "Bra", price: 200 }, { label: "Midback", price: 220 }, { label: "Waist", price: 250 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 200 }, { label: "Bra", price: 220 }, { label: "Midback", price: 250 }, { label: "Waist", price: 280 }] },
-        ],
-      },
-      {
-        name: "Kids Boho Knotless",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 170 }, { label: "Bra", price: 200 }, { label: "Midback", price: 220 }, { label: "Waist", price: 240 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 200 }, { label: "Bra", price: 220 }, { label: "Midback", price: 240 }, { label: "Waist", price: 270 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 220 }, { label: "Bra", price: 240 }, { label: "Midback", price: 270 }, { label: "Waist", price: 300 }] },
-        ],
-      },
-      {
-        name: "Kids Knotless",
-        pricing: [
-          { size: "Large", lengths: [{ label: "Shoulder", price: 140 }, { label: "Bra", price: 170 }, { label: "Midback", price: 190 }, { label: "Waist", price: 210 }] },
-          { size: "Medium", lengths: [{ label: "Shoulder", price: 170 }, { label: "Bra", price: 190 }, { label: "Midback", price: 210 }, { label: "Waist", price: 240 }] },
-          { size: "Small", lengths: [{ label: "Shoulder", price: 190 }, { label: "Bra", price: 210 }, { label: "Midback", price: 240 }, { label: "Waist", price: 270 }] },
-        ],
-      },
-      {
-        name: "Kids Braids",
-        pricing: [
-          { size: "Kids cornrows", lengths: [{ label: "Starting at", price: 70 }] },
-          { size: "Kids Crochets", lengths: [{ label: "Starting at", price: 100 }] },
-        ],
-      },
-    ],
-  },
-];
+import { loadPricingData, type CategoryPricing, type PricingRow } from "@/lib/pricing-data";
 
 function PricingTable({ pricing }: { pricing: PricingRow[] }) {
   const hasLengths = pricing[0]?.lengths.length > 1 && pricing[0]?.lengths[0].label !== "Starting at" && pricing[0]?.lengths[0].label !== "Price";
@@ -299,14 +64,38 @@ function PricingTable({ pricing }: { pricing: PricingRow[] }) {
 
 export default function ServicesPage() {
   const [expandedCategory, setExpandedCategory] = useState<string | null>("Box Braids");
-  const [expandedService, setExpandedService] = useState<string | null>(null);
+  const constExpandedService = useState<string | null>(null);
+  const expandedService = constExpandedService[0];
+  const setExpandedService = constExpandedService[1];
+  const [serviceData, setServiceData] = useState<CategoryPricing[]>([]);
+
+  useEffect(() => {
+    setServiceData(loadPricingData());
+  }, []);
+
+  // Re-load when page becomes visible (navigating back from admin)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setServiceData(loadPricingData());
+      }
+    };
+    const handleStorage = () => {
+      setServiceData(loadPricingData());
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   return (
     <div className="dark-theme" style={{ minHeight: "100vh" }}>
       <Header />
 
       <main style={{ flex: 1 }}>
-        {/* Hero */}
         <section style={{ position: "relative", padding: "96px 24px", overflow: "hidden" }}>
           <div style={{
             position: "absolute",
@@ -340,7 +129,6 @@ export default function ServicesPage() {
           </div>
         </section>
 
-        {/* Services Accordion */}
         <section style={{ paddingBottom: "96px" }}>
           <div style={{ maxWidth: "800px", margin: "0 auto", padding: "0 24px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -354,7 +142,6 @@ export default function ServicesPage() {
                     background: "#1a1a1a",
                   }}
                 >
-                  {/* Category Header */}
                   <button
                     onClick={() =>
                       setExpandedCategory(
@@ -389,17 +176,16 @@ export default function ServicesPage() {
                     )}
                   </button>
 
-                  {/* Category Content */}
                   {expandedCategory === category.name && (
                     <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}>
                       {category.services.map((service) => (
-                        <div key={service.name}>
+                        <div key={service.id || service.name}>
                           {category.services.length > 1 ? (
                             <>
                               <button
                                 onClick={() =>
                                   setExpandedService(
-                                    expandedService === service.name ? null : service.name
+                                    expandedService === (service.id || service.name) ? null : (service.id || service.name)
                                   )
                                 }
                                 style={{
@@ -417,13 +203,13 @@ export default function ServicesPage() {
                                 }}
                               >
                                 <span style={{ fontWeight: 600, color: "white" }}>{service.name}</span>
-                                {expandedService === service.name ? (
+                                {expandedService === (service.id || service.name) ? (
                                   <ChevronUp style={{ width: "16px", height: "16px", color: "#f472b6" }} />
                                 ) : (
                                   <ChevronDown style={{ width: "16px", height: "16px", color: "rgba(255,255,255,0.4)" }} />
                                 )}
                               </button>
-                              {expandedService === service.name && (
+                              {expandedService === (service.id || service.name) && (
                                 <div style={{ padding: "24px", paddingLeft: "64px" }}>
                                   <PricingTable pricing={service.pricing} />
                                   {service.note && (
@@ -448,7 +234,6 @@ export default function ServicesPage() {
               ))}
             </div>
 
-            {/* CTA */}
             <div style={{ marginTop: "64px", textAlign: "center" }}>
               <p style={{ color: "rgba(255,255,255,0.5)", marginBottom: "24px" }}>
                 Ready to book your appointment?
