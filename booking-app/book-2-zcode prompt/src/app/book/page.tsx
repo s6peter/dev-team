@@ -17,7 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDollars, formatDate, formatTime } from "@/lib/utils";
-import { loadPricingData, type CategoryPricing, type ServicePricingItem, type PricingRow } from "@/lib/pricing-data";
+import {
+  loadPricingData,
+  subscribeToPricingDataChanges,
+  type CategoryPricing,
+} from "@/lib/pricing-data";
 import { ArrowLeft, ArrowRight, Check, Upload } from "lucide-react";
 
 type Step = "service" | "datetime" | "intake" | "payment" | "confirmation";
@@ -72,26 +76,97 @@ function BookContent() {
   });
 
   useEffect(() => {
-    setPricingData(loadPricingData());
-  }, []);
-
-  // Re-load when page becomes visible (navigating back from admin)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        setPricingData(loadPricingData());
-      }
-    };
-    const handleStorage = () => {
+    const refreshPricing = () => {
       setPricingData(loadPricingData());
     };
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("storage", handleStorage);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("storage", handleStorage);
-    };
+
+    refreshPricing();
+
+    return subscribeToPricingDataChanges(refreshPricing);
   }, []);
+
+  useEffect(() => {
+    if (pricingData.length === 0) return;
+
+    setFormData((previous) => {
+      const category = pricingData.find((item) => item.name === previous.category);
+      if (!category) {
+        if (
+          previous.category === "" &&
+          previous.serviceId === "" &&
+          previous.sizeId === "" &&
+          previous.lengthId === ""
+        ) {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          category: "",
+          serviceId: "",
+          sizeId: "",
+          lengthId: "",
+        };
+      }
+
+      const service = category.services.find((item) => item.id === previous.serviceId);
+      if (!service) {
+        if (previous.serviceId === "" && previous.sizeId === "" && previous.lengthId === "") {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          serviceId: "",
+          sizeId: "",
+          lengthId: "",
+        };
+      }
+
+      const size = service.pricing.find((item) => item.size === previous.sizeId);
+      if (!size) {
+        if (previous.sizeId === "" && previous.lengthId === "") {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          sizeId: "",
+          lengthId: "",
+        };
+      }
+
+      const needsLength =
+        size.lengths.length > 1 &&
+        size.lengths[0].label !== "Starting at" &&
+        size.lengths[0].label !== "Price";
+
+      if (!needsLength) {
+        if (previous.lengthId === "") {
+          return previous;
+        }
+
+        return {
+          ...previous,
+          lengthId: "",
+        };
+      }
+
+      if (previous.lengthId === "") {
+        return previous;
+      }
+
+      const hasSelectedLength = size.lengths.some((item) => item.label === previous.lengthId);
+      if (hasSelectedLength) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        lengthId: "",
+      };
+    });
+  }, [pricingData]);
 
   const selectedCategory = pricingData.find((c) => c.name === formData.category);
   const selectedService = selectedCategory?.services.find((s) => s.id === formData.serviceId);

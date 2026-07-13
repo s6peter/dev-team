@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 
 const ADMIN_PASSWORD = "queeng2024";
+const PRICING_LAST_SAVED_AT_KEY = "queeng_pricing_last_saved_at";
+const AUTOSAVE_DELAY_MS = 800;
 
 interface AppointmentRecord {
   id: string;
@@ -83,19 +85,116 @@ export default function AdminDashboard() {
   const [pricingData, setPricingData] = useState<CategoryPricing[]>([]);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [expandedService, setExpandedService] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestPricingDataRef = useRef<CategoryPricing[]>([]);
+  const dirtyRef = useRef(false);
+
+  const clearAutosaveTimer = useCallback(() => {
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }, []);
+
+  const persistPricingChanges = useCallback((data: CategoryPricing[]) => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      savePricingData(data);
+      const savedAt = new Date().toISOString();
+      setLastSavedAt(savedAt);
+      setIsDirty(false);
+
+      try {
+        localStorage.setItem(PRICING_LAST_SAVED_AT_KEY, savedAt);
+      } catch {
+        // ignore localStorage write errors for metadata
+      }
+    } catch {
+      setSaveError("Save failed. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, []);
+
+  const applyPricingChange = useCallback((mutate: (draft: CategoryPricing[]) => void) => {
+    setPricingData((current) => {
+      const updated = deepClone(current);
+      mutate(updated);
+      latestPricingDataRef.current = updated;
+      return updated;
+    });
+    setIsDirty(true);
+    setSaveError(null);
+
+    clearAutosaveTimer();
+    autosaveTimerRef.current = setTimeout(() => {
+      persistPricingChanges(latestPricingDataRef.current);
+      autosaveTimerRef.current = null;
+    }, AUTOSAVE_DELAY_MS);
+  }, [clearAutosaveTimer, persistPricingChanges]);
 
   useEffect(() => {
     if (authenticated) {
-      setPricingData(loadPricingData());
+      clearAutosaveTimer();
+      const initialPricing = loadPricingData();
+      setPricingData(initialPricing);
+      latestPricingDataRef.current = initialPricing;
+      setIsDirty(false);
+      setIsSaving(false);
+      setSaveError(null);
+      try {
+        setLastSavedAt(localStorage.getItem(PRICING_LAST_SAVED_AT_KEY));
+      } catch {
+        setLastSavedAt(null);
+      }
       fetchAppointments();
     }
-  }, [authenticated]);
+  }, [authenticated, clearAutosaveTimer]);
 
   useEffect(() => {
     if (!authenticated) return;
     fetchAppointments();
   }, [filter]);
+
+  useEffect(() => {
+    latestPricingDataRef.current = pricingData;
+  }, [pricingData]);
+
+  useEffect(() => {
+    dirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  useEffect(() => {
+    return () => {
+      clearAutosaveTimer();
+      if (!dirtyRef.current || latestPricingDataRef.current.length === 0) return;
+
+      try {
+        savePricingData(latestPricingDataRef.current);
+        localStorage.setItem(PRICING_LAST_SAVED_AT_KEY, new Date().toISOString());
+      } catch {
+        // ignore flush errors during unmount
+      }
+    };
+  }, [clearAutosaveTimer]);
+
+  useEffect(() => {
+    if (!authenticated || !isDirty) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [authenticated, isDirty]);
 
   function fetchAppointments() {
     const all = loadAppointments();
@@ -131,89 +230,90 @@ export default function AdminDashboard() {
 
   function updatePricingCell(catIdx: number, svcIdx: number, rowIdx: number, cellIdx: number, value: string) {
     const num = parseInt(value, 10);
-    const updated = deepClone(pricingData);
-    updated[catIdx].services[svcIdx].pricing[rowIdx].lengths[cellIdx].price = isNaN(num) ? 0 : num;
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      updated[catIdx].services[svcIdx].pricing[rowIdx].lengths[cellIdx].price = isNaN(num) ? 0 : num;
+    });
   }
 
   function addPricingRow(catIdx: number, svcIdx: number) {
-    const updated = deepClone(pricingData);
-    updated[catIdx].services[svcIdx].pricing.push({
-      size: "New Size",
-      lengths: [{ label: "Starting at", price: 0 }],
+    applyPricingChange((updated) => {
+      updated[catIdx].services[svcIdx].pricing.push({
+        size: "New Size",
+        lengths: [{ label: "Starting at", price: 0 }],
+      });
     });
-    setPricingData(updated);
   }
 
   function removePricingRow(catIdx: number, svcIdx: number, rowIdx: number) {
-    const updated = deepClone(pricingData);
-    updated[catIdx].services[svcIdx].pricing.splice(rowIdx, 1);
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      updated[catIdx].services[svcIdx].pricing.splice(rowIdx, 1);
+    });
   }
 
   function updateRowSize(catIdx: number, svcIdx: number, rowIdx: number, value: string) {
-    const updated = deepClone(pricingData);
-    updated[catIdx].services[svcIdx].pricing[rowIdx].size = value;
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      updated[catIdx].services[svcIdx].pricing[rowIdx].size = value;
+    });
   }
 
   function addLengthColumn(catIdx: number, svcIdx: number) {
-    const updated = deepClone(pricingData);
-    for (const row of updated[catIdx].services[svcIdx].pricing) {
-      row.lengths.push({ label: "New", price: 0 });
-    }
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      for (const row of updated[catIdx].services[svcIdx].pricing) {
+        row.lengths.push({ label: "New", price: 0 });
+      }
+    });
   }
 
   function removeLengthColumn(catIdx: number, svcIdx: number, cellIdx: number) {
-    const updated = deepClone(pricingData);
-    for (const row of updated[catIdx].services[svcIdx].pricing) {
-      if (row.lengths.length > 1) row.lengths.splice(cellIdx, 1);
-    }
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      for (const row of updated[catIdx].services[svcIdx].pricing) {
+        if (row.lengths.length > 1) row.lengths.splice(cellIdx, 1);
+      }
+    });
   }
 
   function updateLengthLabel(catIdx: number, svcIdx: number, cellIdx: number, value: string) {
-    const updated = deepClone(pricingData);
-    for (const row of updated[catIdx].services[svcIdx].pricing) {
-      if (row.lengths[cellIdx]) row.lengths[cellIdx].label = value;
-    }
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      for (const row of updated[catIdx].services[svcIdx].pricing) {
+        if (row.lengths[cellIdx]) row.lengths[cellIdx].label = value;
+      }
+    });
   }
 
   function addServiceToCategory(catIdx: number) {
     const name = window.prompt("Service name:");
     if (!name) return;
-    const updated = deepClone(pricingData);
-    updated[catIdx].services.push({
-      id: crypto.randomUUID(),
-      name,
-      pricing: [{ size: "Standard", lengths: [{ label: "Starting at", price: 0 }] }],
+    applyPricingChange((updated) => {
+      updated[catIdx].services.push({
+        id: crypto.randomUUID(),
+        name,
+        pricing: [{ size: "Standard", lengths: [{ label: "Starting at", price: 0 }] }],
+      });
     });
-    setPricingData(updated);
   }
 
   function removeServiceFromCategory(catIdx: number, svcIdx: number) {
     if (!window.confirm("Remove this service from pricing?")) return;
-    const updated = deepClone(pricingData);
-    updated[catIdx].services.splice(svcIdx, 1);
-    if (updated[catIdx].services.length === 0) updated.splice(catIdx, 1);
-    setPricingData(updated);
+    applyPricingChange((updated) => {
+      updated[catIdx].services.splice(svcIdx, 1);
+      if (updated[catIdx].services.length === 0) updated.splice(catIdx, 1);
+    });
   }
 
   function handleSavePricing() {
-    savePricingData(pricingData);
-    setSaveMessage("Pricing saved!");
-    setTimeout(() => setSaveMessage(null), 2000);
+    clearAutosaveTimer();
+    persistPricingChanges(latestPricingDataRef.current.length > 0 ? latestPricingDataRef.current : pricingData);
   }
 
   function handleResetPricing() {
     if (!window.confirm("Reset all pricing to defaults? This cannot be undone.")) return;
     const fresh = deepClone(defaultPricingData);
-    savePricingData(fresh);
+    clearAutosaveTimer();
     setPricingData(fresh);
-    setSaveMessage("Pricing reset to defaults");
-    setTimeout(() => setSaveMessage(null), 2000);
+    latestPricingDataRef.current = fresh;
+    setIsDirty(true);
+    setSaveError(null);
+    persistPricingChanges(fresh);
   }
 
   if (!authenticated) {
@@ -261,6 +361,26 @@ export default function AdminDashboard() {
   const revenue = allAppointments
     .filter((a) => a.status === "confirmed" || a.status === "completed")
     .reduce((sum, a) => sum + (a.price || 0), 0);
+
+  const lastSavedLabel = lastSavedAt
+    ? new Date(lastSavedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : null;
+
+  let pricingStatusText = "No pricing changes yet";
+  let pricingStatusClass = "text-sm text-muted-foreground font-medium";
+
+  if (saveError) {
+    pricingStatusText = saveError;
+    pricingStatusClass = "text-sm text-red-600 font-medium";
+  } else if (isSaving) {
+    pricingStatusText = "Saving...";
+  } else if (isDirty) {
+    pricingStatusText = "Unsaved changes";
+    pricingStatusClass = "text-sm text-amber-600 font-medium";
+  } else if (lastSavedLabel) {
+    pricingStatusText = `Saved at ${lastSavedLabel}`;
+    pricingStatusClass = "text-sm text-green-600 font-medium";
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -479,15 +599,13 @@ export default function AdminDashboard() {
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold">Pricing Tables</h2>
                 <div className="flex gap-2 items-center">
-                  {saveMessage && (
-                    <span className="text-sm text-green-600 font-medium">{saveMessage}</span>
-                  )}
-                  <Button variant="outline" size="sm" onClick={handleResetPricing}>
+                  <span className={pricingStatusClass}>{pricingStatusText}</span>
+                  <Button variant="outline" size="sm" onClick={handleResetPricing} disabled={isSaving}>
                     Reset to Defaults
                   </Button>
-                  <Button size="sm" onClick={handleSavePricing}>
+                  <Button size="sm" onClick={handleSavePricing} disabled={isSaving}>
                     <Save className="h-4 w-4 mr-1" />
-                    Save All Pricing
+                    {isSaving ? "Saving..." : "Save All Pricing"}
                   </Button>
                 </div>
               </div>

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "health:css": "node scripts/check-css-health.mjs",
     "db:push": "npx supabase db push",
     "db:reset": "npx supabase db reset",
     "db:seed": "npx tsx supabase/seed.ts"

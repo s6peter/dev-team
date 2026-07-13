@@ -21,7 +21,143 @@ export interface CategoryPricing {
   services: ServicePricingItem[];
 }
 
-const STORAGE_KEY = "queeng_pricing";
+export const PRICING_STORAGE_KEY = "queeng_pricing";
+const PRICING_UPDATED_EVENT = "queeng:pricing-updated";
+
+function clonePricingData(data: CategoryPricing[]): CategoryPricing[] {
+  return JSON.parse(JSON.stringify(data)) as CategoryPricing[];
+}
+
+function toNonEmptyString(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function toPrice(value: unknown): number {
+  const asNumber = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(asNumber) || asNumber < 0) return 0;
+  return Math.round(asNumber);
+}
+
+function buildServiceId(name: string, catIdx: number, svcIdx: number): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const fallback = slug || "service";
+  return `${fallback}-${catIdx + 1}-${svcIdx + 1}`;
+}
+
+function normalizeLengthCells(raw: unknown): PricingCell[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [{ label: "Starting at", price: 0 }];
+  }
+
+  const cells = raw
+    .map((cell, idx) => {
+      const current = typeof cell === "object" && cell ? cell as Partial<PricingCell> : null;
+      const fallbackLabel = idx === 0 ? "Starting at" : `Length ${idx + 1}`;
+      return {
+        label: toNonEmptyString(current?.label, fallbackLabel),
+        price: toPrice(current?.price),
+      };
+    })
+    .filter((cell) => cell.label.length > 0);
+
+  if (cells.length === 0) return [{ label: "Starting at", price: 0 }];
+  return cells;
+}
+
+function normalizePricingRows(raw: unknown): PricingRow[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [{ size: "Standard", lengths: [{ label: "Starting at", price: 0 }] }];
+  }
+
+  return raw.map((row, idx) => {
+    const current = typeof row === "object" && row ? row as Partial<PricingRow> : null;
+    return {
+      size: toNonEmptyString(current?.size, idx === 0 ? "Standard" : `Option ${idx + 1}`),
+      lengths: normalizeLengthCells(current?.lengths),
+    };
+  });
+}
+
+function normalizeServices(raw: unknown, catIdx: number): ServicePricingItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+
+  return raw
+    .map((service, svcIdx) => {
+      const current = typeof service === "object" && service ? service as Partial<ServicePricingItem> : null;
+      const name = toNonEmptyString(current?.name, `Service ${svcIdx + 1}`);
+      const note = typeof current?.note === "string" && current.note.trim().length > 0
+        ? current.note.trim()
+        : undefined;
+
+      return {
+        id: toNonEmptyString(current?.id, buildServiceId(name, catIdx, svcIdx)),
+        name,
+        pricing: normalizePricingRows(current?.pricing),
+        ...(note ? { note } : {}),
+      };
+    })
+    .filter((service) => service.name.length > 0);
+}
+
+function normalizeCategories(raw: unknown): CategoryPricing[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+
+  const normalized = raw
+    .map((category, catIdx) => {
+      const current = typeof category === "object" && category ? category as Partial<CategoryPricing> : null;
+      const name = toNonEmptyString(current?.name, `Category ${catIdx + 1}`);
+      const icon = toNonEmptyString(current?.icon, "✨");
+      const services = normalizeServices(current?.services, catIdx);
+      return { name, icon, services };
+    })
+    .filter((category) => category.services.length > 0);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function dispatchPricingUpdatedEvent() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(PRICING_UPDATED_EVENT));
+}
+
+export function subscribeToPricingDataChanges(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === PRICING_STORAGE_KEY) {
+      onChange();
+    }
+  };
+
+  const handleVisibility = () => {
+    if (document.visibilityState === "visible") {
+      onChange();
+    }
+  };
+
+  const handlePricingUpdate = () => onChange();
+  const handleFocus = () => onChange();
+  const handlePageShow = () => onChange();
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(PRICING_UPDATED_EVENT, handlePricingUpdate);
+  window.addEventListener("focus", handleFocus);
+  window.addEventListener("pageshow", handlePageShow);
+  document.addEventListener("visibilitychange", handleVisibility);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(PRICING_UPDATED_EVENT, handlePricingUpdate);
+    window.removeEventListener("focus", handleFocus);
+    window.removeEventListener("pageshow", handlePageShow);
+    document.removeEventListener("visibilitychange", handleVisibility);
+  };
+}
 
 export const defaultPricingData: CategoryPricing[] = [
   {
@@ -215,18 +351,38 @@ export const defaultPricingData: CategoryPricing[] = [
 ];
 
 export function loadPricingData(): CategoryPricing[] {
-  if (typeof window === "undefined") return defaultPricingData;
+  if (typeof window === "undefined") return clonePricingData(defaultPricingData);
+
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(PRICING_STORAGE_KEY);
+
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const normalized = normalizeCategories(parsed);
+
+      if (normalized) {
+        const serialized = JSON.stringify(normalized);
+        if (serialized !== raw) {
+          localStorage.setItem(PRICING_STORAGE_KEY, serialized);
+        }
+        return normalized;
+      }
     }
   } catch { /* ignore */ }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultPricingData));
-  return defaultPricingData;
+
+  const fallback = clonePricingData(defaultPricingData);
+  try {
+    localStorage.setItem(PRICING_STORAGE_KEY, JSON.stringify(fallback));
+  } catch {
+    // ignore localStorage write errors and keep in-memory fallback
+  }
+  return fallback;
 }
 
 export function savePricingData(data: CategoryPricing[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (typeof window === "undefined") return;
+
+  const normalized = normalizeCategories(data) ?? clonePricingData(defaultPricingData);
+  localStorage.setItem(PRICING_STORAGE_KEY, JSON.stringify(normalized));
+  dispatchPricingUpdatedEvent();
 }

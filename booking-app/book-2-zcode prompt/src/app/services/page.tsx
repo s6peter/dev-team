@@ -5,7 +5,12 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Crown, Sparkles } from "lucide-react";
-import { loadPricingData, type CategoryPricing, type PricingRow } from "@/lib/pricing-data";
+import {
+  loadPricingData,
+  subscribeToPricingDataChanges,
+  type CategoryPricing,
+  type PricingRow,
+} from "@/lib/pricing-data";
 
 function PricingTable({ pricing }: { pricing: PricingRow[] }) {
   const hasLengths = pricing[0]?.lengths.length > 1 && pricing[0]?.lengths[0].label !== "Starting at" && pricing[0]?.lengths[0].label !== "Price";
@@ -70,25 +75,13 @@ export default function ServicesPage() {
   const [serviceData, setServiceData] = useState<CategoryPricing[]>([]);
 
   useEffect(() => {
-    setServiceData(loadPricingData());
-  }, []);
-
-  // Re-load when page becomes visible (navigating back from admin)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        setServiceData(loadPricingData());
-      }
-    };
-    const handleStorage = () => {
+    const refreshPricing = () => {
       setServiceData(loadPricingData());
     };
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("storage", handleStorage);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("storage", handleStorage);
-    };
+
+    refreshPricing();
+
+    return subscribeToPricingDataChanges(refreshPricing);
   }, []);
 
   return (
