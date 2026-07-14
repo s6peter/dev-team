@@ -29,7 +29,18 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
+  Settings,
 } from "lucide-react";
+import {
+  loadBookingSettings,
+  saveBookingSettings,
+  loadAppointments as loadBookingAppointments,
+  defaultBookingSettings,
+  type BookingSettings,
+  type WeeklyAvailability,
+  type BlockedDay,
+  type BlockedTimeRange,
+} from "@/lib/booking-data";
 
 const ADMIN_PASSWORD = "queeng2024";
 
@@ -73,7 +84,7 @@ export default function AdminDashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [activeTab, setActiveTab] = useState<"appointments" | "services">("appointments");
+  const [activeTab, setActiveTab] = useState<"appointments" | "services" | "schedule">("appointments");
 
   const [allAppointments, setAllAppointments] = useState<AppointmentRecord[]>([]);
   const [filteredAppointments, setFilteredAppointments] = useState<AppointmentRecord[]>([]);
@@ -85,9 +96,12 @@ export default function AdminDashboard() {
   const [expandedService, setExpandedService] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
+  const [bookingSettings, setBookingSettings] = useState<BookingSettings>(defaultBookingSettings);
+
   useEffect(() => {
     if (authenticated) {
       setPricingData(loadPricingData());
+      setBookingSettings(loadBookingSettings());
       fetchAppointments();
     }
   }, [authenticated]);
@@ -96,6 +110,18 @@ export default function AdminDashboard() {
     if (!authenticated) return;
     fetchAppointments();
   }, [filter]);
+
+  useEffect(() => {
+    if (!authenticated) return;
+    const handler = () => fetchAppointments();
+    window.addEventListener("queeng:appointments-updated", handler);
+    window.addEventListener("storage", (e) => {
+      if (e.key === "queeng_appointments") handler();
+    });
+    return () => {
+      window.removeEventListener("queeng:appointments-updated", handler);
+    };
+  }, [authenticated]);
 
   function fetchAppointments() {
     const all = loadAppointments();
@@ -129,40 +155,64 @@ export default function AdminDashboard() {
 
   // --- Pricing edit functions (deep clone to avoid mutation) ---
 
+  function autoSave(data: CategoryPricing[]) {
+    savePricingData(data);
+  }
+
   function updatePricingCell(catIdx: number, svcIdx: number, rowIdx: number, cellIdx: number, value: string) {
     const num = parseInt(value, 10);
     const updated = deepClone(pricingData);
     updated[catIdx].services[svcIdx].pricing[rowIdx].lengths[cellIdx].price = isNaN(num) ? 0 : num;
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function addPricingRow(catIdx: number, svcIdx: number) {
     const updated = deepClone(pricingData);
-    updated[catIdx].services[svcIdx].pricing.push({
-      size: "New Size",
-      lengths: [{ label: "Starting at", price: 0 }],
-    });
+    const svc = updated[catIdx].services[svcIdx];
+    const templateRow = svc.pricing[0];
+    const isMultiColumn = templateRow && templateRow.lengths.length > 1;
+    if (isMultiColumn) {
+      const newRow = {
+        size: "New Size",
+        lengths: templateRow.lengths.map((l: { label: string; price: number }) => ({ label: l.label, price: 0 })),
+      };
+      svc.pricing.push(newRow);
+    } else {
+      svc.pricing.push({
+        size: "New Size",
+        lengths: [{ label: "Starting at", price: 0 }],
+      });
+    }
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function removePricingRow(catIdx: number, svcIdx: number, rowIdx: number) {
     const updated = deepClone(pricingData);
     updated[catIdx].services[svcIdx].pricing.splice(rowIdx, 1);
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function updateRowSize(catIdx: number, svcIdx: number, rowIdx: number, value: string) {
     const updated = deepClone(pricingData);
     updated[catIdx].services[svcIdx].pricing[rowIdx].size = value;
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function addLengthColumn(catIdx: number, svcIdx: number) {
     const updated = deepClone(pricingData);
     for (const row of updated[catIdx].services[svcIdx].pricing) {
+      const firstLabel = row.lengths[0]?.label || "";
+      if (row.lengths.length === 1 && (firstLabel === "Starting at" || firstLabel === "Price")) {
+        row.lengths[0].label = "Option 1";
+      }
       row.lengths.push({ label: "New", price: 0 });
     }
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function removeLengthColumn(catIdx: number, svcIdx: number, cellIdx: number) {
@@ -171,6 +221,7 @@ export default function AdminDashboard() {
       if (row.lengths.length > 1) row.lengths.splice(cellIdx, 1);
     }
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function updateLengthLabel(catIdx: number, svcIdx: number, cellIdx: number, value: string) {
@@ -179,6 +230,7 @@ export default function AdminDashboard() {
       if (row.lengths[cellIdx]) row.lengths[cellIdx].label = value;
     }
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function addServiceToCategory(catIdx: number) {
@@ -191,6 +243,7 @@ export default function AdminDashboard() {
       pricing: [{ size: "Standard", lengths: [{ label: "Starting at", price: 0 }] }],
     });
     setPricingData(updated);
+    autoSave(updated);
   }
 
   function removeServiceFromCategory(catIdx: number, svcIdx: number) {
@@ -199,6 +252,21 @@ export default function AdminDashboard() {
     updated[catIdx].services.splice(svcIdx, 1);
     if (updated[catIdx].services.length === 0) updated.splice(catIdx, 1);
     setPricingData(updated);
+    autoSave(updated);
+  }
+
+  function addCategory() {
+    const name = window.prompt("Category name:");
+    if (!name?.trim()) return;
+    const icon = window.prompt("Category icon (emoji):", "✨") || "✨";
+    const updated = deepClone(pricingData);
+    updated.push({
+      name: name.trim(),
+      icon: icon.trim() || "✨",
+      services: [],
+    });
+    setPricingData(updated);
+    autoSave(updated);
   }
 
   function handleSavePricing() {
@@ -215,6 +283,81 @@ export default function AdminDashboard() {
     setPricingData(loadPricingData());
     setSaveMessage("Pricing reset to defaults");
     setTimeout(() => setSaveMessage(null), 2000);
+  }
+
+  // --- Schedule settings functions ---
+
+  function saveSettings(settings: BookingSettings) {
+    saveBookingSettings(settings);
+    setBookingSettings(settings);
+    setSaveMessage("Schedule saved!");
+    setTimeout(() => setSaveMessage(null), 2000);
+  }
+
+  function updateWeeklyDay(dayOfWeek: number, field: "active" | "startTime" | "endTime", value: boolean | string) {
+    const updated = deepClone(bookingSettings);
+    const day = updated.weeklyAvailability.find((d) => d.dayOfWeek === dayOfWeek);
+    if (day) {
+      if (field === "active") day.active = value as boolean;
+      else if (field === "startTime") day.startTime = value as string;
+      else if (field === "endTime") day.endTime = value as string;
+      saveSettings(updated);
+    }
+  }
+
+  function addBlockedDay() {
+    const date = window.prompt("Date to block (YYYY-MM-DD):");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const reason = window.prompt("Reason:", "Blocked") || "Blocked";
+    const updated = deepClone(bookingSettings);
+    updated.blockedDays.push({
+      id: crypto.randomUUID(),
+      date,
+      reason,
+      createdAt: new Date().toISOString(),
+    });
+    saveSettings(updated);
+  }
+
+  function removeBlockedDay(id: string) {
+    const updated = deepClone(bookingSettings);
+    updated.blockedDays = updated.blockedDays.filter((d) => d.id !== id);
+    saveSettings(updated);
+  }
+
+  function addBlockedTimeRange() {
+    const date = window.prompt("Date (YYYY-MM-DD):");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    const startTime = window.prompt("Start time (HH:MM):", "12:00");
+    if (!startTime) return;
+    const endTime = window.prompt("End time (HH:MM):", "14:00");
+    if (!endTime) return;
+    const reason = window.prompt("Reason:", "Blocked") || "Blocked";
+    const updated = deepClone(bookingSettings);
+    updated.blockedTimeRanges.push({
+      id: crypto.randomUUID(),
+      date,
+      startTime,
+      endTime,
+      reason,
+      createdAt: new Date().toISOString(),
+    });
+    saveSettings(updated);
+  }
+
+  function removeBlockedTimeRange(id: string) {
+    const updated = deepClone(bookingSettings);
+    updated.blockedTimeRanges = updated.blockedTimeRanges.filter((r) => r.id !== id);
+    saveSettings(updated);
+  }
+
+  function updateSettingField(field: "slotIntervalMinutes" | "bookingWindowDays" | "minLeadMinutes" | "bufferMinutes", value: number) {
+    const updated = deepClone(bookingSettings);
+    if (field === "slotIntervalMinutes") updated.slotIntervalMinutes = value;
+    else if (field === "bookingWindowDays") updated.bookingWindowDays = value;
+    else if (field === "minLeadMinutes") updated.minLeadMinutes = value;
+    else if (field === "bufferMinutes") updated.bufferMinutes = value;
+    saveSettings(updated);
   }
 
   if (!authenticated) {
@@ -286,6 +429,13 @@ export default function AdminDashboard() {
               <List className="h-4 w-4 mr-2" />
               Manage Services
             </Button>
+            <Button
+              variant={activeTab === "schedule" ? "default" : "outline"}
+              onClick={() => setActiveTab("schedule")}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Schedule
+            </Button>
           </div>
 
           {activeTab === "appointments" && (
@@ -348,7 +498,7 @@ export default function AdminDashboard() {
 
               {/* Filter Tabs - includes no_show */}
               <div className="flex gap-2 mb-6">
-                {["all", "pending", "confirmed", "completed", "no_show"].map((status) => (
+                {["all", "pending", "confirmed", "completed", "no_show", "cancelled"].map((status) => (
                   <Button
                     key={status}
                     variant={filter === status ? "default" : "outline"}
@@ -426,6 +576,8 @@ export default function AdminDashboard() {
                                     ? "bg-yellow-100 text-yellow-700"
                                     : appointment.status === "completed"
                                     ? "bg-blue-100 text-blue-700"
+                                    : appointment.status === "declined"
+                                    ? "bg-orange-100 text-orange-700"
                                     : "bg-red-100 text-red-700"
                                 }`}
                               >
@@ -441,8 +593,11 @@ export default function AdminDashboard() {
                                 <Button size="sm" onClick={() => handleStatusChange(appointment.id, "confirmed")}>
                                   <Check className="h-4 w-4 mr-1" /> Confirm
                                 </Button>
-                                <Button size="sm" variant="outline" onClick={() => handleStatusChange(appointment.id, "no_show")}>
-                                  No Show
+                                <Button size="sm" variant="outline" onClick={() => handleStatusChange(appointment.id, "declined")}>
+                                  Decline
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleStatusChange(appointment.id, "cancelled")}>
+                                  Cancel
                                 </Button>
                               </>
                             )}
@@ -451,12 +606,15 @@ export default function AdminDashboard() {
                                 <Button size="sm" onClick={() => handleStatusChange(appointment.id, "completed")}>
                                   <Check className="h-4 w-4 mr-1" /> Complete
                                 </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleStatusChange(appointment.id, "cancelled")}>
+                                  Cancel
+                                </Button>
                                 <Button size="sm" variant="outline" onClick={() => handleStatusChange(appointment.id, "no_show")}>
                                   No Show
                                 </Button>
                               </>
                             )}
-                            {(appointment.status === "completed" || appointment.status === "no_show") && (
+                            {(appointment.status === "completed" || appointment.status === "no_show" || appointment.status === "declined" || appointment.status === "cancelled") && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -483,6 +641,9 @@ export default function AdminDashboard() {
                   {saveMessage && (
                     <span className="text-sm text-green-600 font-medium">{saveMessage}</span>
                   )}
+                  <Button variant="outline" size="sm" onClick={addCategory}>
+                    <Plus className="h-3 w-3 mr-1" /> Add Category
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleResetPricing}>
                     Reset to Defaults
                   </Button>
@@ -571,6 +732,174 @@ export default function AdminDashboard() {
                   )}
                 </Card>
               ))}
+            </div>
+          )}
+
+          {activeTab === "schedule" && (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold">Schedule Management</h2>
+                {saveMessage && (
+                  <span className="text-sm text-green-600 font-medium">{saveMessage}</span>
+                )}
+              </div>
+
+              {/* Weekly Hours */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Weekly Hours</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {bookingSettings.weeklyAvailability.map((day) => (
+                    <div key={day.dayOfWeek} className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 w-32">
+                        <input
+                          type="checkbox"
+                          checked={day.active}
+                          onChange={(e) => updateWeeklyDay(day.dayOfWeek, "active", e.target.checked)}
+                          className="rounded"
+                        />
+                        <span className="font-medium text-sm">{day.label}</span>
+                      </label>
+                      {day.active && (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="time"
+                            className="h-8 w-32"
+                            value={day.startTime}
+                            onChange={(e) => updateWeeklyDay(day.dayOfWeek, "startTime", e.target.value)}
+                          />
+                          <span className="text-muted-foreground">to</span>
+                          <Input
+                            type="time"
+                            className="h-8 w-32"
+                            value={day.endTime}
+                            onChange={(e) => updateWeeklyDay(day.dayOfWeek, "endTime", e.target.value)}
+                          />
+                        </div>
+                      )}
+                      {!day.active && (
+                        <span className="text-sm text-muted-foreground">Closed</span>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Booking Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Booking Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm">Slot Interval (minutes)</Label>
+                      <Input
+                        type="number"
+                        className="mt-1"
+                        min={15}
+                        step={15}
+                        value={bookingSettings.slotIntervalMinutes}
+                        onChange={(e) => updateSettingField("slotIntervalMinutes", parseInt(e.target.value) || 30)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Booking Window (days)</Label>
+                      <Input
+                        type="number"
+                        className="mt-1"
+                        min={1}
+                        value={bookingSettings.bookingWindowDays}
+                        onChange={(e) => updateSettingField("bookingWindowDays", parseInt(e.target.value) || 60)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Min Lead Time (minutes)</Label>
+                      <Input
+                        type="number"
+                        className="mt-1"
+                        min={0}
+                        step={15}
+                        value={bookingSettings.minLeadMinutes}
+                        onChange={(e) => updateSettingField("minLeadMinutes", parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Buffer Between Appointments (minutes)</Label>
+                      <Input
+                        type="number"
+                        className="mt-1"
+                        min={0}
+                        step={15}
+                        value={bookingSettings.bufferMinutes}
+                        onChange={(e) => updateSettingField("bufferMinutes", parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Blocked Days */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Blocked Days</CardTitle>
+                  <Button size="sm" variant="outline" onClick={addBlockedDay}>
+                    <Plus className="h-3 w-3 mr-1" /> Block Day
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {bookingSettings.blockedDays.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No blocked days</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {bookingSettings.blockedDays.map((day) => (
+                        <div key={day.id} className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded">
+                          <div>
+                            <span className="font-medium text-sm">{formatDate(day.date)}</span>
+                            <span className="text-sm text-muted-foreground ml-2">— {day.reason}</span>
+                          </div>
+                          <Button size="sm" variant="ghost" onClick={() => removeBlockedDay(day.id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Blocked Time Ranges */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Blocked Time Ranges</CardTitle>
+                  <Button size="sm" variant="outline" onClick={addBlockedTimeRange}>
+                    <Plus className="h-3 w-3 mr-1" /> Block Time Range
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {bookingSettings.blockedTimeRanges.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No blocked time ranges</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {bookingSettings.blockedTimeRanges.map((range) => (
+                        <div key={range.id} className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded">
+                          <div>
+                            <span className="font-medium text-sm">{formatDate(range.date)}</span>
+                            <span className="text-sm text-muted-foreground ml-2">
+                              {range.startTime} — {range.endTime}
+                            </span>
+                            <span className="text-sm text-muted-foreground ml-2">({range.reason})</span>
+                          </div>
+                          <Button size="sm" variant="ghost" onClick={() => removeBlockedTimeRange(range.id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>

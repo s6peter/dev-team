@@ -22,7 +22,17 @@ import {
   subscribeToPricingDataChanges,
   type CategoryPricing,
 } from "@/lib/pricing-data";
-import { ArrowLeft, ArrowRight, Check, Upload } from "lucide-react";
+import {
+  loadBookingSettings,
+  loadAppointments,
+  getAvailabilityForDate,
+  getMonthCalendarDates,
+  toDateString,
+  formatTimeLabel,
+  type BookingSettings,
+  type AvailabilitySummary,
+} from "@/lib/booking-data";
+import { ArrowLeft, ArrowRight, Check, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 
 type Step = "service" | "datetime" | "intake" | "payment" | "confirmation";
 
@@ -42,25 +52,20 @@ interface FormData {
 
 const DEPOSIT = 40;
 const TAX_RATE = 0.0825;
-
-const timeSlots = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
-  "15:00", "15:30", "16:00", "16:30", "17:00",
-];
+const DEFAULT_DURATION = 240;
 
 function BookContent() {
   const searchParams = useSearchParams();
   const preselectedCategory = searchParams.get("category");
 
-  const availableDates = Array.from({ length: 14 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() + i + 1);
-    return date.toISOString().split("T")[0];
-  });
-
   const [step, setStep] = useState<Step>("service");
   const [pricingData, setPricingData] = useState<CategoryPricing[]>([]);
+  const [bookingSettings, setBookingSettings] = useState<BookingSettings | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [availabilitySummary, setAvailabilitySummary] = useState<AvailabilitySummary | null>(null);
   const [formData, setFormData] = useState<FormData>({
     category: preselectedCategory || "",
     serviceId: "",
@@ -84,6 +89,29 @@ function BookContent() {
 
     return subscribeToPricingDataChanges(refreshPricing);
   }, []);
+
+  useEffect(() => {
+    setBookingSettings(loadBookingSettings());
+  }, []);
+
+  useEffect(() => {
+    if (!formData.date || !bookingSettings) {
+      setAvailabilitySummary(null);
+      return;
+    }
+    const settings = bookingSettings;
+    const allAppointments = loadAppointments();
+    const summary = getAvailabilityForDate({
+      settings,
+      appointments: allAppointments,
+      date: formData.date,
+      durationMinutes: DEFAULT_DURATION,
+    });
+    setAvailabilitySummary(summary);
+    if (!summary.slots.includes(formData.startTime)) {
+      setFormData((prev) => ({ ...prev, startTime: "" }));
+    }
+  }, [formData.date, bookingSettings]);
 
   useEffect(() => {
     if (pricingData.length === 0) return;
@@ -252,6 +280,7 @@ function BookContent() {
       localStorage.setItem("queeng_appointments", JSON.stringify([appointment]));
     }
 
+    window.dispatchEvent(new Event("queeng:appointments-updated"));
     setStep("confirmation");
   };
 
@@ -419,55 +448,117 @@ function BookContent() {
 
               {step === "datetime" && (
                 <div className="space-y-6">
+                  {/* Month Calendar */}
                   <div>
-                    <Label className="mb-3 block">Select a Date:</Label>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-                      {availableDates.map((date) => {
-                        const dateObj = new Date(date + "T12:00:00");
-                        const dayName = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+                    <div className="flex items-center justify-between mb-3">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const prev = new Date(currentMonth);
+                          prev.setMonth(prev.getMonth() - 1);
+                          setCurrentMonth(prev);
+                        }}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Label className="text-base font-medium">
+                        {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                      </Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const next = new Date(currentMonth);
+                          next.setMonth(next.getMonth() + 1);
+                          setCurrentMonth(next);
+                        }}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1 mb-1">
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                        <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-1">
+                      {getMonthCalendarDates(currentMonth).map((date) => {
+                        const dateObj = new Date(`${date}T12:00:00`);
                         const dayNum = dateObj.getDate();
+                        const isCurrentMonth = dateObj.getMonth() === currentMonth.getMonth();
+                        const isPast = date < toDateString(new Date());
                         const isSelected = formData.date === date;
+
+                        let isAvailable = false;
+                        if (bookingSettings && !isPast && isCurrentMonth) {
+                          const summary = getAvailabilityForDate({
+                            settings: bookingSettings,
+                            appointments: loadAppointments(),
+                            date,
+                            durationMinutes: DEFAULT_DURATION,
+                          });
+                          isAvailable = summary.available;
+                        }
+
                         return (
                           <button
                             key={date}
                             type="button"
+                            disabled={!isAvailable || !isCurrentMonth}
                             onClick={() => setFormData({ ...formData, date, startTime: "" })}
-                            className={`border rounded-lg p-2 text-center transition-colors ${
-                              isSelected
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border hover:border-primary/50"
+                            className={`border rounded-lg p-1.5 text-center transition-colors ${
+                              !isCurrentMonth
+                                ? "opacity-30 cursor-default"
+                                : isPast
+                                ? "opacity-40 cursor-not-allowed"
+                                : isAvailable
+                                ? isSelected
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border hover:border-primary/50 cursor-pointer"
+                                : "border-border opacity-40 cursor-not-allowed"
                             }`}
                           >
-                            <p className="text-xs">{dayName}</p>
-                            <p className="text-lg font-medium">{dayNum}</p>
+                            <p className="text-sm">{dayNum}</p>
                           </button>
                         );
                       })}
                     </div>
                   </div>
 
-                  {formData.date && (
+                  {/* Time Slots */}
+                  {formData.date && availabilitySummary && (
                     <div>
-                      <Label className="mb-3 block">Select a Time:</Label>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {timeSlots.map((time) => {
-                          const isSelected = formData.startTime === time;
-                          return (
-                            <button
-                              key={time}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, startTime: time })}
-                              className={`border rounded-lg p-3 text-center transition-colors ${
-                                isSelected
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "border-border hover:border-primary/50"
-                              }`}
-                            >
-                              {time}
-                            </button>
-                          );
-                        })}
-                      </div>
+                      <Label className="mb-3 block">
+                        Available Times for {formatDate(formData.date)}:
+                      </Label>
+                      {availabilitySummary.slots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4">
+                          {availabilitySummary.reason || "No available times for this date."}
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                          {availabilitySummary.slots.map((time) => {
+                            const isSelected = formData.startTime === time;
+                            return (
+                              <button
+                                key={time}
+                                type="button"
+                                onClick={() => setFormData({ ...formData, startTime: time })}
+                                className={`border rounded-lg p-3 text-center transition-colors ${
+                                  isSelected
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-border hover:border-primary/50"
+                                }`}
+                              >
+                                {formatTimeLabel(time)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

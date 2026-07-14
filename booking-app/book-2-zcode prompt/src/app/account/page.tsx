@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDollars, formatDate } from "@/lib/utils";
-import { Calendar, Clock, Scissors, Search } from "lucide-react";
+import { Calendar, Clock, Scissors, Search, X } from "lucide-react";
 import Link from "next/link";
 
 interface LocalAppointment {
@@ -37,6 +37,18 @@ export default function AccountPage() {
     const filtered = all.filter((a) => a.clientEmail.toLowerCase() === email.toLowerCase());
     setAppointments(filtered);
     setSearched(true);
+  }
+
+  function handleCancelAppointment(appointmentId: string) {
+    if (!window.confirm("Are you sure you want to cancel this appointment?")) return;
+    const all = JSON.parse(localStorage.getItem("queeng_appointments") || "[]") as LocalAppointment[];
+    const updated = all.map((a) =>
+      a.id === appointmentId ? { ...a, status: "cancelled" } : a
+    );
+    localStorage.setItem("queeng_appointments", JSON.stringify(updated));
+    window.dispatchEvent(new Event("queeng:appointments-updated"));
+    const filtered = updated.filter((a) => a.clientEmail.toLowerCase() === email.toLowerCase());
+    setAppointments(filtered);
   }
 
   const upcoming = appointments.filter(
@@ -141,6 +153,14 @@ export default function AccountPage() {
                                     >
                                       {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
                                     </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="mt-3 text-red-600 border-red-200 hover:bg-red-50"
+                                      onClick={() => handleCancelAppointment(a.id)}
+                                    >
+                                      <X className="h-3 w-3 mr-1" /> Cancel Appointment
+                                    </Button>
                                   </div>
                                 </div>
                               </div>
