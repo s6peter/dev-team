@@ -1,40 +1,209 @@
-Braiding Business Booking Website — Implementation Plan
-Locked decisions
-Booking flow: client picks slot → appointment is pending + slot held → you confirm or decline; decline auto-refunds deposit
-Payments: deposit charged online with tax; balance tracked, paid in-person without tax
-Architecture: solo now, but data model keyed by stylist_id so adding stylists is data-only later
-Reminders: email (Resend) + SMS (Twilio), confirmation + 24h + 2h before
-Content: pulled from your existing website + booking page + Google Maps listing
-Tech stack
-Next.js 14 (App Router) + TypeScript + Tailwind CSS
-Supabase (Postgres + Auth + Storage)
-Stripe (deposits + refunds + webhooks)
-Resend (email) + Twilio (SMS)
-Vercel (hosting + cron for reminders)
-Data model (key tables)
-stylists · services (+service_tiers for size/length add-ons) · availability (weekly recurring) · availability_overrides (time off/travel) · clients · appointments (status: pending→confirmed/declined/completed/no_show/cancelled) · intake_responses · payments (deposit/balance/tip) · reviews · portfolio_items · messages · slot_holds (TTL auto-release via DB trigger)
+# QueenG Braids — Booking Application Implementation Plan (v2)
 
-Tax math: online deposit = deposit% × (price + tax); in-person balance_due = price × (1 − deposit%) with no tax. Tax rate stored per service/region.
+A modern, mobile-first booking app for a **solo braiding stylist**, designed to grow to
+multi-stylist by data alone. This plan supersedes v1: it keeps the original locked
+decisions, folds in research from the leading salon booking platforms (Fresha, Booksy,
+GlossGenius, Vagaro, Square Appointments, StyleSeat, Acuity, Mangomint), and corrects the
+architecture/security defects found in the first build.
 
-Features to build (full set)
-Storefront: landing page (hero, value prop, CTA), services catalog (style, price range, duration, prep/care notes, reference photos), portfolio gallery (filter by style/length, before-after), about artist, testimonials/reviews, FAQ, location + embedded Google Map + hours, contact form, social/Instagram feed.
+--------------------------------------------------------------------------------
+## Locked decisions (unchanged intent, hardened)
+--------------------------------------------------------------------------------
+- **Booking flow:** client picks slot → slot is *held* (TTL) → deposit charged online →
+  appointment created as **pending** → stylist **confirms or declines** → decline
+  auto-refunds the deposit. The deposit paying does NOT auto-confirm (a v1 bug: the
+  webhook confirmed on payment). Payment = "deposit received, awaiting your approval".
+- **Payments:** a **flat $50 non-refundable deposit** is charged online to book (per
+  service; configurable). **Tax is charged on the deposit ONLY, not the whole service.**
+  The remaining balance (service price − deposit, no tax) is paid in person after service.
+  All money stored/handled as **integer cents**, one source of truth.
+- **Architecture:** solo now; every domain row keyed by `stylist_id` so adding stylists
+  is data-only later.
+- **Reminders:** email (Resend) + SMS (Twilio) — instant confirmation + 24h + 2h before.
+  Idempotent (a reminder is sent at most once; tracked in DB).
+- **Content:** pulled from the real QueenG Braids business (Denton, TX). Fix the v1 NAP
+  inconsistency — one canonical name/address/phone/hours/email everywhere.
 
-Booking engine: service+tier selection → live availability calendar (recurring hours + overrides + buffer, conflict-safe, concurrency locking) → client intake form with inspiration photo upload → deposit checkout (tax included) → appointment created as pending + slot hold → you confirm or decline (decline auto-refunds).
+--------------------------------------------------------------------------------
+## Tech stack
+--------------------------------------------------------------------------------
+- Next.js 14 (App Router) + TypeScript + Tailwind CSS + Radix UI primitives
+- Supabase (Postgres + Auth + Storage) — **local Supabase CLI stack** for dev
+- Stripe (deposits + refunds + webhooks) via Payment Elements (test mode)
+- Resend (email) + Twilio (SMS)
+- Vercel (hosting + cron for reminders / hold-cleanup)
 
-Client experience: optional account (auto-created on email), view upcoming + past appointments, reschedule/cancel within policy window, booking history.
+### Client strategy (fixes v1's single anon client)
+- `lib/supabase/browser.ts` — anon client, browser, respects RLS (auth session).
+- `lib/supabase/server.ts` — SSR client bound to cookies for the logged-in user.
+- `lib/supabase/admin.ts` — **service-role** client, server-only, for privileged writes
+  (client/appointment creation, payment bookkeeping, webhook status flips, refunds).
+  Never imported into a client component.
 
-Admin dashboard (you): calendar (day/week/agenda, drag-to-reschedule, color-coded by status), pending-approval queue, booking management, availability editor (hours + overrides/blackouts), services manager (styles, tiers, pricing, durations, photos), gallery manager, client CRM (profile, notes, preferences, allergies flagged, lifetime spend, tags like VIP/returning), reviews (moderate + reply + request post-appointment), finance (deposits collected, balances owed, revenue by period, tax-ready CSV export), messaging, analytics (bookings/month, revenue, top styles, utilization, no-show rate, new vs returning).
+--------------------------------------------------------------------------------
+## Data model (corrected + extended)
+--------------------------------------------------------------------------------
+Existing tables (kept): stylists, services, service_tiers, availability,
+availability_overrides, clients, appointments, intake_responses, payments, reviews,
+portfolio_items, messages, slot_holds.
 
-System: Supabase auth with client + admin roles, transactional email + SMS (confirmation + reminders), Stripe webhooks for payment events, cloud image storage + optimization, SEO (metadata, sitemap, mobile-first responsive), accessibility (WCAG), privacy/cookie policy.
+**Corrections**
+- `stylists.user_id uuid references auth.users` (was missing in prod schema → all admin
+  RLS broken). RLS keyed on it.
+- Money in cents everywhere; `services.base_price`, `service_tiers.price_addon`, all
+  `payments.amount` are cents. `deposit_percent` numeric, `tax_rate` numeric.
+- `clients.email` UNIQUE per stylist; index it. Nullability of TS types matches columns.
+- **Concurrency:** add `btree_gist` EXCLUDE constraint on appointments preventing
+  overlapping active (pending/confirmed) ranges per stylist; slot_holds gets the same.
+  Booking runs inside a transaction / RPC that re-checks and consumes the hold.
+- **slot_holds TTL:** real expiry via a `SECURITY DEFINER` cleanup function called by the
+  availability endpoint and a cron route (the v1 AFTER-INSERT trigger never ran).
 
-Build order (single pass, sequenced sanely)
-Project scaffold + Supabase schema + RLS policies + design system from your branding
-Storefront pages + pull real content from your links
-Booking engine + slot logic + intake form
-Stripe deposit (with tax) + webhooks + confirm/decline flow
-Admin dashboard + CRM + calendar
-Reminders cron + email/SMS notifications
-Reviews, analytics, finance export
-SEO, accessibility, polish, deploy to Vercel
+**New tables / columns (research-driven)**
+- `services`: `+ requires_deposit bool`, `+ deposit_flat_cents int null`,
+  `+ buffer_minutes int`, `+ is_active bool`, `+ sort_order int`, `+ images text[]`.
+- `cancellation_policy` (per stylist): notice windows, no-show fee %, late-cancel fee %,
+  policy text (shown + must be consented at booking).
+- `appointments`: `+ policy_consented_at`, `+ reminder_24h_sent_at`,
+  `+ reminder_2h_sent_at`, `+ rebook_prompt_sent_at`, `+ cancelled_reason`,
+  `+ reschedule_of` (self-link).
+- `waitlist_entries`: stylist_id, service_id/tier, client contact, desired date/range,
+  flexibility, status (waiting/notified/booked/expired).
+- `payments`: `+ stripe_refund_id`, `+ idempotency_key`. Webhook idempotency via a
+  `processed_stripe_events` table.
+- `messages`: sender/receiver FK to auth.users; two-way client↔stylist thread.
 
-https://qgbraids.square.site/static/icons/payment-methods/googlepay.svg", "Image 1: QueenG Braids & Essentials": "https://qgbraids.square.site/uploads/b/78791a80-53df-11ef-a602-c50e6563f189/logo_EE079BAD-2163-4AC9-80E2-6FF1A713FA0E.jpeg?width=400", "Imag... Output: webReader_result_summary: [{"text": {"images": {"Image 4: Google Pay": "https://qgbraids.square.site/static/icons/payment-methods/googlepay.svg", "Image 1: QueenG Braids & Essentials": "https://qgbraids.square.site/uploads/b/78791a80-53df-11ef-a602-c50e6563f189/logo_EE079BAD-2163-4AC9-80E2-6FF1A713FA0E.jpeg?width=400", "Imag...
+### Money math (single module `lib/pricing.ts`, cents) — tax on deposit only
+- `serviceTotal = base_price + Σ tier.price_addon` (cents)
+- `deposit = requires_deposit ? (deposit_flat_cents ?? round(serviceTotal * deposit_percent/100)) : 0`  (flat $50 by default; non-refundable)
+- `tax = round(deposit * tax_rate)`  ← **tax applies to the deposit, not the service**
+- `chargedNow = deposit + tax`  (the Stripe amount)
+- `balanceDueInPerson = serviceTotal − deposit`  (no tax) — tracked, paid after service
+- `grandTotal = serviceTotal + tax`. Deposit applies toward the final price. Must match the
+  SQL in `hold_slot()`/`confirm_booking_from_hold()` exactly. Unit-tested rounding.
+
+### Policies (data-driven, per stylist; shown on booking + a Policies page)
+- Deposit: flat $50, **non-refundable**, required to book; applied toward the total.
+- Cancellation: free ≥24h before; <24h forfeits the deposit. No-call/no-show forfeits.
+- Reschedule: once, with the same deposit, ≥24h before, via the confirmation-email link.
+- Hair: must arrive **washed & blow-dried, no oil/products**; if not blow-dried a **$20**
+  prep fee applies. Extensions (Xpression pre-stretched) provided for all styles; **boho
+  styles require client-provided 100% human hair (curly pieces)**; bring your own hair for
+  other styles.
+- Late: 10-min grace; after 10 min a **$20 late fee**; after 15 min it's a no-show (deposit
+  forfeited).
+- Kids: ages **5–12** only; parents don't sit in; a pickup text goes out ~30 min before done.
+- Guests: no extra guests; drop-off only for kids.
+- Stored in `cancellation_policy` (+ `blow_dry_fee_cents`, `late_fee_cents`, `grace_minutes`,
+  `policy_text`). Fees are charged in person by the stylist (surfaced in the admin UI).
+
+--------------------------------------------------------------------------------
+## Features to build (full set)
+--------------------------------------------------------------------------------
+
+### Storefront (brand-first — the anti-marketplace advantage)
+Landing (hero, value prop, above-the-fold Book CTA), **DB-driven** services catalog with
+photos/price-range/duration/prep+care notes, portfolio gallery (filter by style/length,
+before/after), about, testimonials/reviews (live from DB), FAQ, location + accurate
+embedded map + hours, contact form (actually sends), social/Instagram. SEO + a11y first.
+
+### Booking engine (the core loop — must be flawless on mobile)
+Guest-friendly, **no forced account**, ≤3-tap path, visible progress bar, full price +
+deposit shown up front:
+1. Style family → service → size/length variant (dynamic price + **duration**).
+2. Duration-aware, conflict-safe availability calendar (recurring hours + overrides +
+   buffer; grays out taken slots; suggests next opening). Fixes v1's fixed-240-min bug.
+3. Intake/consultation form with **real inspiration-photo upload** to Supabase Storage
+   (scalp sensitivity, prior damage, hair length/type, allergies, reference photos,
+   photo-usage consent).
+4. **Deposit checkout** with Stripe Payment Elements (Apple/Google Pay), tax included;
+   creates a slot hold first, then PaymentIntent; consented cancellation policy checkbox.
+5. On success → appointment **pending** + instant confirmation email/SMS; NOT auto-confirmed.
+
+### No-show protection engine (highest-priority research finding)
+- Per-service deposit (flat or %), non-refundable, auto-applied to final price; option to
+  exempt trusted returning clients.
+- Consented cancellation policy at booking (checkbox + stored timestamp) → makes fees
+  defensible. Card-on-file no-show / late-cancel fee, stackable on the deposit.
+- Enforceable self-service reschedule/cancel windows (e.g. free >48h, deposit forfeit <24h).
+
+### Client experience
+Optional account (magic-link, auto-created on email at booking), upcoming + past
+appointments, self-service reschedule/cancel within policy, booking history, rebook in
+one tap, saved profile.
+
+### Admin dashboard (real server auth + roles)
+**Catalog management (full CRUD):** create/rename/delete **categories**; create a service
+inside a category; edit a service (name, category, duration, buffer, base price, flat
+deposit, deposit toggle, tax rate, prep/care notes, image, active); delete a service; manage
+its **size/length/add-on tiers**. Backed by `service_categories` + `services` +
+`service_tiers`, all mutations via authenticated admin APIs (never client-trusted).
+
+**Calendar management:** day/agenda view color-coded by status; **block a slot / day**
+(availability override / blackout); edit weekly hours + buffers; **create an appointment
+directly on the calendar** (walk-in / phone booking — pick or create client, choose service,
+record deposit as paid-in-person, no online charge; overlap-guarded by the same EXCLUDE
+constraint). Charge the $20 blow-dry / $20 late fees in person from the appointment card.
+
+Plus: **pending-approval queue**, booking management
+(confirm/decline/complete/no_show/cancel/revert), **client CRM** (profile,
+notes, preferences, allergies flagged, style photos, lifetime spend, tags VIP/returning),
+reviews (moderate + reply + auto-request post-appointment), finance (deposits collected,
+balances owed, refunds, revenue by period counting only *completed*, tax-ready CSV
+export), messaging, analytics (bookings/month, revenue, top styles, utilization,
+no-show rate, new vs returning).
+
+### Growth / retention (research-driven, built-in, never a paywalled upsell)
+- Auto-filling **waitlist**: client self-joins with date flexibility; freed slots
+  auto-notify best matches.
+- **Automated rebooking** prompt at checkout + timed follow-up on the 6–8 week braid cycle.
+- **Auto review request** shortly after completion; reviews feed storefront social proof.
+- Lightweight retention: lapsed-client win-back + one-tap message blast (kept minimal).
+
+### System
+Supabase Auth (client + admin roles via `stylists.user_id`), RLS everywhere (no `using(true)`
+on PII), transactional email + SMS (idempotent), Stripe webhooks (signed + idempotent,
+verify amount), Supabase Storage for images + optimization, SEO (per-page metadata,
+metadataBase, OG/Twitter, canonical, robots, sitemap, LocalBusiness/HairSalon JSON-LD),
+accessibility (WCAG: focus trap, aria-expanded, contrast, labelled controls), privacy/
+cookie policy.
+
+--------------------------------------------------------------------------------
+## Modern-UX principles (baked into every screen)
+--------------------------------------------------------------------------------
+Mobile-first (~80% of salon bookings are mobile) · guest checkout, no forced account ·
+visible progress indicator · full price + deposit transparency up front · primary CTA
+above the fold · real-time availability with reasons + next-opening suggestion · minimal
+fields + inline validation + forgiving recovery · layered reminders (confirm + 24h + 2h)
+with one-tap reschedule · consented, unavoidable cancellation policy · photo-forward,
+on-brand, app-like feel · rich client profiles that personalize + carry prep notes into
+confirmations.
+
+--------------------------------------------------------------------------------
+## Build order (single pass, sequenced sanely)
+--------------------------------------------------------------------------------
+0. **Local Supabase stack** (CLI) + one canonical migration (fixed schema, RLS,
+   concurrency constraints, slot-hold TTL, new tables) + one canonical seed
+   (real QueenG catalog, cents). Generate `database.types.ts`.
+1. Supabase client trio (browser/server/admin) + Auth (magic link) + `lib/pricing.ts`
+   + shared money/date utils (timezone-safe).
+2. Booking engine: duration-aware availability API → slot-hold create → intake + photo
+   upload → Stripe deposit checkout → appointment **pending** → confirmation email/SMS.
+   Concurrency-safe via transactional RPC.
+3. Confirm/decline flow (secure admin API, decline auto-refunds w/ policy-aware amount) +
+   admin dashboard shell + pending queue + calendar.
+4. Client account (auth, history, self-service reschedule/cancel within policy).
+5. Storefront wired to DB (services, portfolio, reviews) + fix NAP + real map + contact form.
+6. Reminders cron (idempotent) + slot-hold cleanup cron.
+7. Growth features: waitlist, rebooking, review automation, CRM, finance CSV, analytics.
+8. SEO, accessibility, performance, polish; verify `next build` + local end-to-end run;
+   deploy notes for Vercel + hosted Supabase.
+
+--------------------------------------------------------------------------------
+## Business facts (canonical — use everywhere)
+--------------------------------------------------------------------------------
+- Name: QueenG Braids & Essentials
+- Address: 4909 Beaver Creek Ave, Denton, TX 76207
+- Phone: (901) 631-1481 · Email: queengbraids@gmail.com
+- Deposit policy: 50% of service + tax, non-refundable inside 24h of appointment.
+(If any of these change, update this block and it flows to the whole site.)

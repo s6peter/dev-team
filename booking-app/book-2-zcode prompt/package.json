@@ -3,14 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3456",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3456",
     "lint": "next lint",
     "health:css": "node scripts/check-css-health.mjs",
-    "db:push": "npx supabase db push",
-    "db:reset": "npx supabase db reset",
-    "db:seed": "npx tsx supabase/seed.ts"
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local > src/types/database.types.ts",
+    "setup:local": "node scripts/setup-local.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.18",
@@ -21,6 +23,7 @@
     "@radix-ui/react-toast": "^1.2.18",
     "@stripe/react-stripe-js": "^6.7.0",
     "@stripe/stripe-js": "^9.9.0",
+    "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.50.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -45,6 +48,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.29",
     "postcss": "^8.5.3",
+    "supabase": "^2.109.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2"
   }

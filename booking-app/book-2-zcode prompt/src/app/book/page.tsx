@@ -1,751 +1,627 @@
 "use client";
 
-import { useState, useCallback, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { Check, ChevronLeft, Clock, Loader2, MapPin, Upload, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { formatDollars, formatDate, formatTime } from "@/lib/utils";
-import {
-  loadPricingData,
-  subscribeToPricingDataChanges,
-  type CategoryPricing,
-} from "@/lib/pricing-data";
-import {
-  loadBookingSettings,
-  loadAppointments,
-  getAvailabilityForDate,
-  getMonthCalendarDates,
-  toDateString,
-  formatTimeLabel,
-  type BookingSettings,
-  type AvailabilitySummary,
-} from "@/lib/booking-data";
-import { ArrowLeft, ArrowRight, Check, Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { getStripe } from "@/lib/stripe-client";
+import { computePricing, formatCents } from "@/lib/pricing";
+import { addDays, formatDateLabel, formatTimeLabel, nowInSalonTz } from "@/lib/time";
+import { formatDuration } from "@/lib/utils";
+import type { Catalog, CatalogService, CatalogTier } from "@/types/catalog";
 
-type Step = "service" | "datetime" | "intake" | "payment" | "confirmation";
+type Step = 0 | 1 | 2 | 3 | 4;
+const STEPS = ["Service", "Date & Time", "Your details", "Deposit", "Done"];
 
-interface FormData {
-  category: string;
-  serviceId: string;
-  sizeId: string;
-  lengthId: string;
-  date: string;
-  startTime: string;
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
-  inspirationPhotos: string[];
-  notes: string;
+interface IntakeAnswers {
+  hairPrepped: string;
+  scalpNotes: string;
+  photoConsent: string;
 }
 
-const DEPOSIT = 40;
-const TAX_RATE = 0.0825;
-const DEFAULT_DURATION = 240;
+export default function BookPage() {
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [openDays, setOpenDays] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState<Step>(0);
 
-function BookContent() {
-  const searchParams = useSearchParams();
-  const preselectedCategory = searchParams.get("category");
+  // selection
+  const [category, setCategory] = useState<string | null>(null);
+  const [service, setService] = useState<CatalogService | null>(null);
+  const [sizeId, setSizeId] = useState<string | null>(null);
+  const [lengthId, setLengthId] = useState<string | null>(null);
+  const [addonIds, setAddonIds] = useState<string[]>([]);
 
-  const [step, setStep] = useState<Step>("service");
-  const [pricingData, setPricingData] = useState<CategoryPricing[]>([]);
-  const [bookingSettings, setBookingSettings] = useState<BookingSettings | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [availabilitySummary, setAvailabilitySummary] = useState<AvailabilitySummary | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    category: preselectedCategory || "",
-    serviceId: "",
-    sizeId: "",
-    lengthId: "",
-    date: "",
-    startTime: "",
-    clientName: "",
-    clientEmail: "",
-    clientPhone: "",
-    inspirationPhotos: [],
-    notes: "",
-  });
+  // datetime
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [date, setDate] = useState<string | null>(null);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotReason, setSlotReason] = useState<string | undefined>();
+  const [startTime, setStartTime] = useState<string | null>(null);
+
+  // details
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [notes, setNotes] = useState("");
+  const [intake, setIntake] = useState<IntakeAnswers>({ hairPrepped: "", scalpNotes: "", photoConsent: "" });
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  // waitlist
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistJoined, setWaitlistJoined] = useState(false);
+
+  // payment
+  const [policyConsented, setPolicyConsented] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [holdError, setHoldError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const refreshPricing = () => {
-      setPricingData(loadPricingData());
-    };
-
-    refreshPricing();
-
-    return subscribeToPricingDataChanges(refreshPricing);
+    fetch("/api/catalog")
+      .then((r) => r.json())
+      .then((d) => {
+        setCatalog(d);
+        setOpenDays(d.openDays ?? []);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    setBookingSettings(loadBookingSettings());
-  }, []);
+  const categories = useMemo(() => {
+    if (!catalog) return [];
+    return Array.from(new Set(catalog.services.map((s) => s.category)));
+  }, [catalog]);
 
+  const sizeTiers = service?.tiers.filter((t) => t.kind === "size") ?? [];
+  const lengthTiers = service?.tiers.filter((t) => t.kind === "length") ?? [];
+  const addonTiers = service?.tiers.filter((t) => t.kind === "addon") ?? [];
+
+  const selectedTiers: CatalogTier[] = useMemo(() => {
+    if (!service) return [];
+    const ids = new Set([sizeId, lengthId, ...addonIds].filter(Boolean) as string[]);
+    return service.tiers.filter((t) => ids.has(t.id));
+  }, [service, sizeId, lengthId, addonIds]);
+
+  const tierAddonCents = selectedTiers.reduce((n, t) => n + t.price_addon, 0);
+  const workMinutes = (service?.duration_minutes ?? 0) + selectedTiers.reduce((n, t) => n + t.duration_addon, 0);
+
+  const pricing = useMemo(() => {
+    if (!service) return null;
+    return computePricing({
+      basePriceCents: service.base_price,
+      tierPriceAddonCents: tierAddonCents,
+      taxRate: service.tax_rate,
+      depositPercent: service.deposit_percent,
+      requiresDeposit: service.requires_deposit,
+      depositFlatCents: service.deposit_flat_cents,
+    });
+  }, [service, tierAddonCents]);
+
+  const canContinueService = Boolean(service && (sizeTiers.length === 0 || sizeId));
+
+  // fetch slots when date/duration changes
   useEffect(() => {
-    if (!formData.date || !bookingSettings) {
-      setAvailabilitySummary(null);
+    if (!date || !service) return;
+    setSlotsLoading(true);
+    setStartTime(null);
+    const params = new URLSearchParams({ date, serviceId: service.id, minutes: String(workMinutes) });
+    if (sizeId) params.set("tierId", sizeId);
+    fetch(`/api/availability?${params}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setSlots(d.slots ?? []);
+        setSlotReason(d.reason);
+      })
+      .finally(() => setSlotsLoading(false));
+  }, [date, service, workMinutes, sizeId]);
+
+  async function joinWaitlist() {
+    if (!service || !date) return;
+    const emailToUse = clientEmail || waitlistEmail;
+    const res = await fetch("/api/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serviceId: service.id,
+        tierId: sizeId,
+        clientName: clientName || "Waitlist guest",
+        clientEmail: emailToUse,
+        clientPhone,
+        desiredDate: date,
+        flexibility: "plus_minus_3",
+      }),
+    });
+    if (res.ok) setWaitlistJoined(true);
+  }
+
+  function selectService(s: CatalogService) {
+    setService(s);
+    setSizeId(null);
+    setLengthId(null);
+    setAddonIds([]);
+    setDate(null);
+    setStartTime(null);
+  }
+
+  async function handlePhotoUpload(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    for (const file of Array.from(files).slice(0, 6 - photos.length)) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.url) setPhotos((p) => [...p, data.url]);
+    }
+    setUploading(false);
+  }
+
+  async function startCheckout() {
+    if (!service || !date || !startTime) return;
+    setSubmitting(true);
+    setHoldError(null);
+    const intakeArr = [
+      { question: "Will you arrive with hair washed, blow-dried and detangled?", answer: intake.hairPrepped },
+      { question: "Scalp sensitivity, allergies, or prior damage to note?", answer: intake.scalpNotes },
+      { question: "Consent to use finished photos on social/portfolio?", answer: intake.photoConsent },
+    ].filter((q) => q.answer);
+
+    const res = await fetch("/api/bookings/hold", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serviceId: service.id,
+        tierId: sizeId,
+        addonIds,
+        date,
+        startTime,
+        clientName,
+        clientEmail,
+        clientPhone,
+        notes,
+        intake: intakeArr,
+        inspirationPhotos: photos,
+        policyConsented,
+      }),
+    });
+    const data = await res.json();
+    setSubmitting(false);
+
+    if (!res.ok) {
+      setHoldError(data.error || "Something went wrong.");
+      if (res.status === 409) {
+        setStep(1);
+        setStartTime(null);
+      }
       return;
     }
-    const settings = bookingSettings;
-    const allAppointments = loadAppointments();
-    const summary = getAvailabilityForDate({
-      settings,
-      appointments: allAppointments,
-      date: formData.date,
-      durationMinutes: DEFAULT_DURATION,
-    });
-    setAvailabilitySummary(summary);
-    if (!summary.slots.includes(formData.startTime)) {
-      setFormData((prev) => ({ ...prev, startTime: "" }));
+    if (data.requiresPayment === false) {
+      setStep(4);
+      return;
     }
-  }, [formData.date, bookingSettings]);
+    setClientSecret(data.clientSecret);
+    setPaymentIntentId(data.paymentIntentId);
+  }
 
-  useEffect(() => {
-    if (pricingData.length === 0) return;
-
-    setFormData((previous) => {
-      const category = pricingData.find((item) => item.name === previous.category);
-      if (!category) {
-        if (
-          previous.category === "" &&
-          previous.serviceId === "" &&
-          previous.sizeId === "" &&
-          previous.lengthId === ""
-        ) {
-          return previous;
-        }
-
-        return {
-          ...previous,
-          category: "",
-          serviceId: "",
-          sizeId: "",
-          lengthId: "",
-        };
-      }
-
-      const service = category.services.find((item) => item.id === previous.serviceId);
-      if (!service) {
-        if (previous.serviceId === "" && previous.sizeId === "" && previous.lengthId === "") {
-          return previous;
-        }
-
-        return {
-          ...previous,
-          serviceId: "",
-          sizeId: "",
-          lengthId: "",
-        };
-      }
-
-      const size = service.pricing.find((item) => item.size === previous.sizeId);
-      if (!size) {
-        if (previous.sizeId === "" && previous.lengthId === "") {
-          return previous;
-        }
-
-        return {
-          ...previous,
-          sizeId: "",
-          lengthId: "",
-        };
-      }
-
-      const needsLength =
-        size.lengths.length > 1 &&
-        size.lengths[0].label !== "Starting at" &&
-        size.lengths[0].label !== "Price";
-
-      if (!needsLength) {
-        if (previous.lengthId === "") {
-          return previous;
-        }
-
-        return {
-          ...previous,
-          lengthId: "",
-        };
-      }
-
-      if (previous.lengthId === "") {
-        return previous;
-      }
-
-      const hasSelectedLength = size.lengths.some((item) => item.label === previous.lengthId);
-      if (hasSelectedLength) {
-        return previous;
-      }
-
-      return {
-        ...previous,
-        lengthId: "",
-      };
-    });
-  }, [pricingData]);
-
-  const selectedCategory = pricingData.find((c) => c.name === formData.category);
-  const selectedService = selectedCategory?.services.find((s) => s.id === formData.serviceId);
-  const selectedSize = selectedService?.pricing.find((r) => r.size === formData.sizeId);
-  const selectedLength = selectedSize?.lengths.find((l) => l.label === formData.lengthId);
-
-  const hasLengths = selectedSize && selectedSize.lengths.length > 1 && selectedSize.lengths[0].label !== "Starting at" && selectedSize.lengths[0].label !== "Price";
-
-  const getFinalPrice = useCallback((): number => {
-    if (!selectedService) return 0;
-    if (selectedLength) return selectedLength.price;
-    if (selectedSize && selectedSize.lengths.length === 1) return selectedSize.lengths[0].price;
-    return 0;
-  }, [selectedSize, selectedLength, selectedService]);
-
-  const calculateDeposit = useCallback(() => {
-    const tax = Math.round(DEPOSIT * TAX_RATE);
-    return DEPOSIT + tax;
-  }, []);
-
-  const canProceed = () => {
-    switch (step) {
-      case "service":
-        if (!formData.serviceId) return false;
-        if (selectedSize) {
-          if (hasLengths) return formData.lengthId !== "";
-          return true;
-        }
-        return false;
-      case "datetime":
-        return formData.date !== "" && formData.startTime !== "";
-      case "intake":
-        return formData.clientName !== "" && formData.clientEmail !== "" && formData.clientPhone !== "";
-      case "payment":
-        return true;
-      default:
-        return false;
-    }
-  };
-
-  const handleNext = () => {
-    if (!canProceed()) return;
-    const steps: Step[] = ["service", "datetime", "intake", "payment", "confirmation"];
-    const currentIndex = steps.indexOf(step);
-    if (currentIndex < steps.length - 1) setStep(steps[currentIndex + 1]);
-  };
-
-  const handleBack = () => {
-    const steps: Step[] = ["service", "datetime", "intake", "payment", "confirmation"];
-    const currentIndex = steps.indexOf(step);
-    if (currentIndex > 0) setStep(steps[currentIndex - 1]);
-  };
-
-  const handleSubmit = async () => {
-    const price = getFinalPrice();
-    const appointment = {
-      id: crypto.randomUUID(),
-      category: formData.category,
-      serviceId: formData.serviceId,
-      serviceName: selectedService?.name || "",
-      sizeId: formData.sizeId,
-      sizeName: selectedSize?.size || "",
-      lengthId: formData.lengthId,
-      lengthName: selectedLength?.label || "",
-      date: formData.date,
-      startTime: formData.startTime,
-      clientName: formData.clientName,
-      clientEmail: formData.clientEmail,
-      clientPhone: formData.clientPhone,
-      notes: formData.notes,
-      price,
-      deposit: calculateDeposit(),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      const existing = JSON.parse(localStorage.getItem("queeng_appointments") || "[]");
-      if (!Array.isArray(existing)) throw new Error("invalid");
-      existing.push(appointment);
-      localStorage.setItem("queeng_appointments", JSON.stringify(existing));
-    } catch {
-      localStorage.setItem("queeng_appointments", JSON.stringify([appointment]));
-    }
-
-    window.dispatchEvent(new Event("queeng:appointments-updated"));
-    setStep("confirmation");
-  };
+  if (loading) {
+    return (
+      <Shell>
+        <div className="flex items-center justify-center py-32 text-muted-foreground">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading services…
+        </div>
+      </Shell>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
+    <Shell>
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
+        <ol className="mb-8 flex items-center gap-2" aria-label="Booking progress">
+          {STEPS.map((label, i) => (
+            <li key={label} className="flex flex-1 flex-col items-center gap-1">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold ${
+                  i < step ? "bg-brand-500 text-white" : i === step ? "bg-brand-500 text-white ring-4 ring-brand-100" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {i < step ? <Check className="h-4 w-4" /> : i + 1}
+              </div>
+              <span className={`hidden text-center text-xs sm:block ${i === step ? "font-semibold text-foreground" : "text-muted-foreground"}`}>{label}</span>
+            </li>
+          ))}
+        </ol>
 
-      <main className="flex-1 py-12">
-        <div className="mx-auto max-w-3xl px-6 lg:px-8">
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              {["Service", "Date & Time", "Your Info", "Payment", "Done"].map((label, index) => {
-                const stepKeys: Step[] = ["service", "datetime", "intake", "payment", "confirmation"];
-                return (
-                  <div key={label} className="flex items-center">
-                    <div
-                      className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-                        step === stepKeys[index]
-                          ? "bg-primary text-primary-foreground"
-                          : index < stepKeys.indexOf(step)
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+        {step > 0 && step < 4 && (
+          <button onClick={() => setStep((s) => (s - 1) as Step)} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+            <ChevronLeft className="mr-1 h-4 w-4" /> Back
+          </button>
+        )}
+
+        {step === 0 && (
+          <div>
+            <h1 className="mb-1 text-2xl font-bold">Choose your style</h1>
+            <p className="mb-6 text-muted-foreground">Prices and times shown up front — no surprises.</p>
+
+            <div className="mb-6 flex flex-wrap gap-2">
+              {categories.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCategory(c === category ? null : c)}
+                  className={`rounded-full border px-4 py-1.5 text-sm font-medium ${category === c ? "border-brand-500 bg-brand-500 text-white" : "border-border hover:border-brand-300"}`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3">
+              {catalog!.services
+                .filter((s) => !category || s.category === category)
+                .map((s) => {
+                  const p = computePricing({ basePriceCents: s.base_price, taxRate: s.tax_rate, depositPercent: s.deposit_percent, requiresDeposit: s.requires_deposit, depositFlatCents: s.deposit_flat_cents });
+                  const selected = service?.id === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => selectService(s)}
+                      className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${selected ? "border-brand-500 ring-2 ring-brand-100" : "border-border hover:border-brand-300"}`}
                     >
-                      {index < stepKeys.indexOf(step) ? <Check className="h-4 w-4" /> : index + 1}
-                    </div>
-                    <span className="hidden sm:block ml-2 text-sm font-medium">{label}</span>
-                    {index < 4 && <div className="hidden sm:block w-8 h-0.5 bg-muted mx-2" />}
+                      {s.image_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg object-cover" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="font-semibold">{s.name}</span>
+                          <span className="whitespace-nowrap font-semibold text-brand-600">from {formatCents(p.serviceTotalCents)}</span>
+                        </div>
+                        <p className="line-clamp-1 text-sm text-muted-foreground">{s.description}</p>
+                        <span className="mt-1 inline-flex items-center text-xs text-muted-foreground"><Clock className="mr-1 h-3 w-3" />{formatDuration(s.duration_minutes)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {service && (
+              <div className="mt-6 space-y-5 rounded-xl border border-border bg-muted/30 p-4">
+                {sizeTiers.length > 0 && (
+                  <TierGroup label="Size" required tiers={sizeTiers} value={sizeId} onChange={(v) => setSizeId(v as string | null)} single />
+                )}
+                {lengthTiers.length > 0 && (
+                  <TierGroup label="Length" tiers={lengthTiers} value={lengthId} onChange={(v) => setLengthId(v as string | null)} single />
+                )}
+                {addonTiers.length > 0 && (
+                  <TierGroup label="Add-ons" tiers={addonTiers} value={addonIds} onChange={(v) => setAddonIds(v as string[])} />
+                )}
+                {pricing && (
+                  <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
+                    <span className="text-muted-foreground">Estimated total · {formatDuration(workMinutes)}</span>
+                    <span className="text-lg font-bold">{formatCents(pricing.serviceTotalCents)}</span>
                   </div>
-                );
-              })}
+                )}
+              </div>
+            )}
+
+            <Button className="mt-6 w-full bg-brand-500 hover:bg-brand-600" disabled={!canContinueService} onClick={() => setStep(1)}>
+              Continue
+            </Button>
+          </div>
+        )}
+
+        {step === 1 && service && (
+          <div>
+            <h1 className="mb-1 text-2xl font-bold">Pick a date & time</h1>
+            <p className="mb-6 text-muted-foreground">{service.name} · {formatDuration(workMinutes)}</p>
+            <Calendar monthOffset={monthOffset} setMonthOffset={setMonthOffset} openDays={openDays} selected={date} onSelect={setDate} />
+            {date && (
+              <div className="mt-6">
+                <h2 className="mb-3 font-semibold">{formatDateLabel(date)}</h2>
+                {slotsLoading ? (
+                  <div className="flex items-center py-6 text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Finding open times…</div>
+                ) : slots.length ? (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {slots.map((t) => (
+                      <button key={t} onClick={() => setStartTime(t)} className={`rounded-lg border py-2 text-sm font-medium ${startTime === t ? "border-brand-500 bg-brand-500 text-white" : "border-border hover:border-brand-300"}`}>
+                        {formatTimeLabel(t)}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-muted/50 p-4 text-sm">
+                    <p className="text-muted-foreground">{slotReason || "No open times"} for this day — try another date, or join the waitlist and we&apos;ll text you if a spot opens near this date.</p>
+                    {waitlistJoined ? (
+                      <p className="mt-3 font-medium text-green-700">You&apos;re on the waitlist! 🎉 We&apos;ll reach out if a slot frees up.</p>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {!clientEmail && (
+                          <input type="email" value={waitlistEmail} onChange={(e) => setWaitlistEmail(e.target.value)} placeholder="you@email.com" className="rounded-lg border border-border p-2 text-sm" />
+                        )}
+                        <Button size="sm" variant="outline" disabled={!/^[^@]+@[^@]+\.[^@]+$/.test(clientEmail || waitlistEmail)} onClick={joinWaitlist}>
+                          Join the waitlist
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            <Button className="mt-6 w-full bg-brand-500 hover:bg-brand-600" disabled={!startTime} onClick={() => setStep(2)}>Continue</Button>
+          </div>
+        )}
+
+        {step === 2 && service && (
+          <div className="space-y-4">
+            <h1 className="text-2xl font-bold">Your details</h1>
+            <p className="text-muted-foreground">No account needed — we&apos;ll email you a confirmation.</p>
+            <Field label="Full name" value={clientName} onChange={setClientName} required autoComplete="name" />
+            <Field label="Email" type="email" value={clientEmail} onChange={setClientEmail} required autoComplete="email" />
+            <Field label="Phone (for reminders)" type="tel" value={clientPhone} onChange={setClientPhone} autoComplete="tel" />
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Anything I should know? (optional)</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full rounded-lg border border-border p-2.5 text-sm" placeholder="Style ideas, parting preferences, etc." />
+            </div>
+
+            <SelectField label="Will you arrive with hair washed, blow-dried & detangled?" value={intake.hairPrepped} onChange={(v) => setIntake({ ...intake, hairPrepped: v })} options={["Yes", "I'd like a wash/blow-dry add-on", "Not sure"]} />
+            <Field label="Scalp sensitivity, allergies, or prior damage? (optional)" value={intake.scalpNotes} onChange={(v) => setIntake({ ...intake, scalpNotes: v })} />
+            <SelectField label="Can I share finished photos on my portfolio?" value={intake.photoConsent} onChange={(v) => setIntake({ ...intake, photoConsent: v })} options={["Yes", "No"]} />
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Inspiration photos (optional)</label>
+              <div className="flex flex-wrap gap-2">
+                {photos.map((url) => (
+                  <div key={url} className="relative h-20 w-20">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="inspiration" className="h-20 w-20 rounded-lg object-cover" />
+                    <button onClick={() => setPhotos((p) => p.filter((u) => u !== url))} className="absolute -right-1.5 -top-1.5 rounded-full bg-black/70 p-0.5 text-white"><X className="h-3 w-3" /></button>
+                  </div>
+                ))}
+                {photos.length < 6 && (
+                  <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-brand-300">
+                    {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handlePhotoUpload(e.target.files)} />
+                  </label>
+                )}
+              </div>
+            </div>
+
+            <Button className="w-full bg-brand-500 hover:bg-brand-600" disabled={!clientName || !/^[^@]+@[^@]+\.[^@]+$/.test(clientEmail)} onClick={() => setStep(3)}>Continue to deposit</Button>
+          </div>
+        )}
+
+        {step === 3 && service && pricing && (
+          <div className="space-y-5">
+            <h1 className="text-2xl font-bold">Review & secure your spot</h1>
+            <div className="rounded-xl border border-border p-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold">{service.name}</div>
+                  <div className="text-sm text-muted-foreground">{selectedTiers.map((t) => t.name).join(" · ") || "Standard"}</div>
+                  <div className="mt-1 text-sm text-muted-foreground">{date && formatDateLabel(date)} · {startTime && formatTimeLabel(startTime)} · {formatDuration(workMinutes)}</div>
+                </div>
+              </div>
+              <dl className="space-y-1 border-t border-border pt-3 text-sm">
+                <Row k="Service total" v={formatCents(pricing.serviceTotalCents)} />
+                <Row k="Deposit (non-refundable)" v={formatCents(pricing.depositCents)} />
+                <Row k="Tax (on deposit)" v={formatCents(pricing.taxCents)} />
+                <Row k="Due now" v={formatCents(pricing.chargedNowCents)} bold />
+                <Row k="Balance due in person (no tax)" v={formatCents(pricing.balanceDueCents)} muted />
+              </dl>
+            </div>
+
+            {catalog?.policy?.policy_text && (
+              <label className="flex items-start gap-2 rounded-lg bg-muted/40 p-3 text-sm">
+                <input type="checkbox" checked={policyConsented} onChange={(e) => setPolicyConsented(e.target.checked)} className="mt-0.5 h-4 w-4" />
+                <span className="text-muted-foreground">I agree to the cancellation policy: {catalog.policy.policy_text}</span>
+              </label>
+            )}
+
+            {holdError && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{holdError}</p>}
+
+            {!clientSecret ? (
+              <Button className="w-full bg-brand-500 hover:bg-brand-600" disabled={!policyConsented || submitting} onClick={startCheckout}>
+                {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Reserving your slot…</> : `Pay deposit ${formatCents(pricing.chargedNowCents)}`}
+              </Button>
+            ) : (
+              <Elements stripe={getStripe()} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#db2777" } } }}>
+                <PaymentForm
+                  depositLabel={formatCents(pricing.chargedNowCents)}
+                  onPaid={async () => {
+                    await fetch("/api/bookings/confirm", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ paymentIntentId }),
+                    });
+                    setStep(4);
+                  }}
+                />
+              </Elements>
+            )}
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="py-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600"><Check className="h-8 w-8" /></div>
+            <h1 className="mb-2 text-2xl font-bold">Booking request received! 🎉</h1>
+            <p className="mx-auto max-w-md text-muted-foreground">
+              Your deposit is in and your spot is held. Your appointment is <strong>pending approval</strong> — QueenG will confirm shortly, and you&apos;ll get an email {clientPhone && "and text "}confirmation.
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Link href="/account"><Button className="bg-brand-500 hover:bg-brand-600">View my appointment</Button></Link>
+              <Link href="/"><Button variant="outline">Back home</Button></Link>
             </div>
           </div>
+        )}
+      </div>
+    </Shell>
+  );
+}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {step === "service" && "Select a Service"}
-                {step === "datetime" && "Choose Date & Time"}
-                {step === "intake" && "Your Information"}
-                {step === "payment" && "Review & Pay Deposit"}
-                {step === "confirmation" && ""}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {step === "service" && (
-                <div className="space-y-4">
-                  <div>
-                    <Label className="mb-2 block">Step 1: Choose a Category</Label>
-                    <Select
-                      value={formData.category}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, category: value, serviceId: "", sizeId: "", lengthId: "" })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {pricingData.map((cat) => (
-                          <SelectItem key={cat.name} value={cat.name}>
-                            {cat.icon} {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+/* ---------- helpers ---------- */
 
-                  {selectedCategory && (
-                    <div>
-                      <Label className="mb-2 block">Step 2: Choose a Service</Label>
-                      <Select
-                        value={formData.serviceId}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, serviceId: value, sizeId: "", lengthId: "" })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a service" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedCategory.services.map((svc) => (
-                            <SelectItem key={svc.id} value={svc.id}>
-                              {svc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {selectedService && (
-                    <div className="mt-6 space-y-4">
-                      <Label className="mb-2 block">Select Size:</Label>
-                      <Select
-                        value={formData.sizeId}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, sizeId: value, lengthId: "" })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a size" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedService.pricing.map((row) => (
-                            <SelectItem key={row.size} value={row.size}>
-                              {row.size}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
-                      {selectedSize && hasLengths && (
-                        <div>
-                          <Label className="mb-2 block">Select Length:</Label>
-                          <Select
-                            value={formData.lengthId}
-                            onValueChange={(value) =>
-                              setFormData({ ...formData, lengthId: value })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a length" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {selectedSize.lengths.map((length) => (
-                                <SelectItem key={length.label} value={length.label}>
-                                  {length.label} - {formatDollars(length.price)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      {selectedSize && !hasLengths && selectedSize.lengths.length === 1 && (
-                        <div className="bg-accent/50 rounded-lg p-4">
-                          <p className="text-sm font-medium">{selectedSize.size}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{selectedSize.lengths[0].label}: {formatDollars(selectedSize.lengths[0].price)}</p>
-                        </div>
-                      )}
-
-                      <div className="bg-accent/50 rounded-lg p-4 mt-4">
-                        {selectedLength ? (
-                          <p className="text-sm">
-                            <strong>Price:</strong> {formatDollars(selectedLength.price)}
-                          </p>
-                        ) : selectedSize && selectedSize.lengths.length === 1 ? (
-                          <p className="text-sm">
-                            <strong>Price:</strong> {formatDollars(selectedSize.lengths[0].price)}
-                          </p>
-                        ) : selectedSize ? (
-                          <p className="text-sm text-muted-foreground">Select a length to see price</p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Select a size to see price</p>
-                        )}
-                        <p className="text-sm">
-                          <strong>Deposit required:</strong> {formatDollars(DEPOSIT)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {step === "datetime" && (
-                <div className="space-y-6">
-                  {/* Month Calendar */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const prev = new Date(currentMonth);
-                          prev.setMonth(prev.getMonth() - 1);
-                          setCurrentMonth(prev);
-                        }}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Label className="text-base font-medium">
-                        {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                      </Label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          const next = new Date(currentMonth);
-                          next.setMonth(next.getMonth() + 1);
-                          setCurrentMonth(next);
-                        }}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1 mb-1">
-                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                        <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1">
-                      {getMonthCalendarDates(currentMonth).map((date) => {
-                        const dateObj = new Date(`${date}T12:00:00`);
-                        const dayNum = dateObj.getDate();
-                        const isCurrentMonth = dateObj.getMonth() === currentMonth.getMonth();
-                        const isPast = date < toDateString(new Date());
-                        const isSelected = formData.date === date;
-
-                        let isAvailable = false;
-                        if (bookingSettings && !isPast && isCurrentMonth) {
-                          const summary = getAvailabilityForDate({
-                            settings: bookingSettings,
-                            appointments: loadAppointments(),
-                            date,
-                            durationMinutes: DEFAULT_DURATION,
-                          });
-                          isAvailable = summary.available;
-                        }
-
-                        return (
-                          <button
-                            key={date}
-                            type="button"
-                            disabled={!isAvailable || !isCurrentMonth}
-                            onClick={() => setFormData({ ...formData, date, startTime: "" })}
-                            className={`border rounded-lg p-1.5 text-center transition-colors ${
-                              !isCurrentMonth
-                                ? "opacity-30 cursor-default"
-                                : isPast
-                                ? "opacity-40 cursor-not-allowed"
-                                : isAvailable
-                                ? isSelected
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "border-border hover:border-primary/50 cursor-pointer"
-                                : "border-border opacity-40 cursor-not-allowed"
-                            }`}
-                          >
-                            <p className="text-sm">{dayNum}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Time Slots */}
-                  {formData.date && availabilitySummary && (
-                    <div>
-                      <Label className="mb-3 block">
-                        Available Times for {formatDate(formData.date)}:
-                      </Label>
-                      {availabilitySummary.slots.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-4">
-                          {availabilitySummary.reason || "No available times for this date."}
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
-                          {availabilitySummary.slots.map((time) => {
-                            const isSelected = formData.startTime === time;
-                            return (
-                              <button
-                                key={time}
-                                type="button"
-                                onClick={() => setFormData({ ...formData, startTime: time })}
-                                className={`border rounded-lg p-3 text-center transition-colors ${
-                                  isSelected
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : "border-border hover:border-primary/50"
-                                }`}
-                              >
-                                {formatTimeLabel(time)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {step === "intake" && (
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="clientName">Full Name *</Label>
-                    <Input id="clientName" value={formData.clientName} onChange={(e) => setFormData({ ...formData, clientName: e.target.value })} className="mt-2" />
-                  </div>
-                  <div>
-                    <Label htmlFor="clientEmail">Email *</Label>
-                    <Input id="clientEmail" type="email" value={formData.clientEmail} onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })} className="mt-2" />
-                  </div>
-                  <div>
-                    <Label htmlFor="clientPhone">Phone *</Label>
-                    <Input id="clientPhone" type="tel" value={formData.clientPhone} onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })} className="mt-2" />
-                  </div>
-                  <div>
-                    <Label htmlFor="notes">Additional Notes (optional)</Label>
-                    <Textarea id="notes" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={4} placeholder="Any allergies, preferences, or special requests..." className="mt-2" />
-                  </div>
-                  <div>
-                    <Label>Inspiration Photos (optional)</Label>
-                    <div className="mt-2 border-2 border-dashed rounded-lg p-8 text-center">
-                      <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
-                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF up to 5MB</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {step === "payment" && selectedService && (
-                <div className="space-y-6">
-                  <div className="border rounded-lg p-4 space-y-3">
-                    <h3 className="font-semibold">Booking Summary</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Category:</span>
-                        <span>{formData.category}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service:</span>
-                        <span>{selectedService.name}</span>
-                      </div>
-                      {selectedSize && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Size:</span>
-                          <span>{selectedSize.size}</span>
-                        </div>
-                      )}
-                      {selectedLength && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Length:</span>
-                          <span>{selectedLength.label}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Date:</span>
-                        <span>{formatDate(formData.date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Time:</span>
-                        <span>{formatTime(`2000-01-01T${formData.startTime}:00`)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Client:</span>
-                        <span>{formData.clientName}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border rounded-lg p-4 space-y-3">
-                    <h3 className="font-semibold">Payment Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service Price:</span>
-                        <span>{formatDollars(getFinalPrice())}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Deposit:</span>
-                        <span>{formatDollars(DEPOSIT)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Tax on deposit:</span>
-                        <span>{formatDollars(Math.round(DEPOSIT * TAX_RATE))}</span>
-                      </div>
-                      <div className="border-t pt-2 mt-2">
-                        <div className="flex justify-between font-semibold">
-                          <span>Deposit Due Now:</span>
-                          <span className="text-primary">{formatDollars(calculateDeposit())}</span>
-                        </div>
-                        <p className="text-sm font-bold text-red-600 mt-1">
-                          Balance ({formatDollars(Math.max(0, getFinalPrice() - DEPOSIT))}) paid in person
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-accent/50 rounded-lg p-4">
-                    <p className="text-sm text-muted-foreground">
-                      By proceeding, you agree to our booking policy. The deposit is non-refundable within 24 hours of the appointment. Balance is due in person on the day of service.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {step === "confirmation" && (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Check className="h-8 w-8 text-primary-foreground" />
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">Booking Request Submitted!</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Your appointment request has been received. You&apos;ll receive a confirmation email once your appointment is approved.
-                  </p>
-                  <div className="border rounded-lg p-4 text-left max-w-sm mx-auto">
-                    <p className="text-sm"><strong>Service:</strong> {selectedService?.name}</p>
-                    {selectedSize && <p className="text-sm"><strong>Size:</strong> {selectedSize.size}</p>}
-                    {selectedLength && <p className="text-sm"><strong>Length:</strong> {selectedLength.label}</p>}
-                    <p className="text-sm"><strong>Date:</strong> {formatDate(formData.date)}</p>
-                    <p className="text-sm"><strong>Time:</strong> {formatTime(`2000-01-01T${formData.startTime}:00`)}</p>
-                  </div>
-                  <Button className="mt-6" onClick={() => {
-                    setStep("service");
-                    setFormData({
-                      category: "",
-                      serviceId: "",
-                      sizeId: "",
-                      lengthId: "",
-                      date: "",
-                      startTime: "",
-                      clientName: "",
-                      clientEmail: "",
-                      clientPhone: "",
-                      inspirationPhotos: [],
-                      notes: "",
-                    });
-                  }}>
-                    Book Another Appointment
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {step !== "confirmation" && (
-            <div className="flex justify-between mt-6">
-              <Button variant="outline" onClick={handleBack} disabled={step === "service"}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              {step === "payment" ? (
-                <Button onClick={handleSubmit} disabled={!canProceed()}>Pay Deposit & Book</Button>
-              ) : (
-                <Button onClick={handleNext} disabled={!canProceed()}>
-                  Next
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      </main>
-
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header />
+      <main className="flex-1">{children}</main>
       <Footer />
     </div>
   );
 }
 
-export default function BookPage() {
+function PaymentForm({ depositLabel, onPaid }: { depositLabel: string; onPaid: () => Promise<void> }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function pay() {
+    if (!stripe || !elements) return;
+    setBusy(true);
+    setError(null);
+    const { error: submitErr } = await elements.submit();
+    if (submitErr) {
+      setError(submitErr.message ?? "Please check your card details.");
+      setBusy(false);
+      return;
+    }
+    const { error: payErr } = await stripe.confirmPayment({ elements, redirect: "if_required" });
+    if (payErr) {
+      setError(payErr.message ?? "Payment failed.");
+      setBusy(false);
+      return;
+    }
+    await onPaid();
+  }
+
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading...</p>
-          </div>
-        </main>
-        <Footer />
+    <div className="space-y-4">
+      <PaymentElement />
+      {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      <Button className="w-full bg-brand-500 hover:bg-brand-600" disabled={!stripe || busy} onClick={pay}>
+        {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</> : `Pay deposit ${depositLabel}`}
+      </Button>
+      <p className="flex items-center justify-center text-xs text-muted-foreground"><MapPin className="mr-1 h-3 w-3" />Secured by Stripe · test mode</p>
+    </div>
+  );
+}
+
+function TierGroup({
+  label,
+  tiers,
+  value,
+  onChange,
+  single,
+  required,
+}: {
+  label: string;
+  tiers: CatalogTier[];
+  value: string | string[] | null;
+  onChange: (v: string | string[] | null) => void;
+  single?: boolean;
+  required?: boolean;
+}) {
+  const selected = (id: string) => (single ? value === id : (value as string[])?.includes(id));
+  function toggle(id: string) {
+    if (single) onChange(value === id ? null : id);
+    else {
+      const arr = (value as string[]) ?? [];
+      onChange(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
+    }
+  }
+  return (
+    <div>
+      <div className="mb-2 text-sm font-medium">{label}{required && <span className="text-brand-500"> *</span>}</div>
+      <div className="flex flex-wrap gap-2">
+        {tiers.map((t) => (
+          <button key={t.id} onClick={() => toggle(t.id)} className={`rounded-lg border px-3 py-1.5 text-sm ${selected(t.id) ? "border-brand-500 bg-brand-50 text-brand-700" : "border-border hover:border-brand-300"}`}>
+            {t.name}{t.price_addon > 0 && <span className="text-muted-foreground"> +{formatCents(t.price_addon)}</span>}
+          </button>
+        ))}
       </div>
-    }>
-      <BookContent />
-    </Suspense>
+    </div>
+  );
+}
+
+function Calendar({ monthOffset, setMonthOffset, openDays, selected, onSelect }: {
+  monthOffset: number; setMonthOffset: (n: number) => void; openDays: number[]; selected: string | null; onSelect: (d: string) => void;
+}) {
+  const now = nowInSalonTz();
+  const [y, m] = now.dateStr.split("-").map(Number);
+  const view = new Date(Date.UTC(y, m - 1 + monthOffset, 1));
+  const monthName = view.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+  const firstDow = view.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(view.getUTCFullYear(), view.getUTCMonth() + 1, 0)).getUTCDate();
+  const lastBookable = addDays(now.dateStr, 60);
+
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${view.getUTCFullYear()}-${String(view.getUTCMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+
+  return (
+    <div className="rounded-xl border border-border p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <button disabled={monthOffset === 0} onClick={() => setMonthOffset(Math.max(0, monthOffset - 1))} className="rounded p-1 disabled:opacity-30" aria-label="Previous month"><ChevronLeft className="h-5 w-5" /></button>
+        <span className="font-semibold">{monthName}</span>
+        <button onClick={() => setMonthOffset(monthOffset + 1)} className="rounded p-1" aria-label="Next month"><ChevronLeft className="h-5 w-5 rotate-180" /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={i} className="py-1">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, i) => {
+          if (!cell) return <div key={i} />;
+          const dow = new Date(cell + "T12:00:00Z").getUTCDay();
+          const disabled = cell < now.dateStr || cell > lastBookable || !openDays.includes(dow);
+          const day = Number(cell.split("-")[2]);
+          return (
+            <button key={i} disabled={disabled} onClick={() => onSelect(cell)}
+              className={`aspect-square rounded-lg text-sm ${selected === cell ? "bg-brand-500 text-white" : disabled ? "cursor-not-allowed text-muted-foreground/30" : "hover:bg-brand-50"}`}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, type = "text", required, autoComplete }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean; autoComplete?: string }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium">{label}{required && <span className="text-brand-500"> *</span>}</label>
+      <input type={type} value={value} autoComplete={autoComplete} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-border p-2.5 text-sm" />
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium">{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-border bg-white p-2.5 text-sm">
+        <option value="">Select…</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Row({ k, v, bold, muted }: { k: string; v: string; bold?: boolean; muted?: boolean }) {
+  return (
+    <div className={`flex justify-between ${bold ? "font-semibold text-foreground" : muted ? "text-muted-foreground" : ""}`}>
+      <dt>{k}</dt>
+      <dd>{v}</dd>
+    </div>
   );
 }

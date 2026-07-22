@@ -126,6 +126,14 @@ export function Footer() {
                   </li>
                   <li>
                     <Link
+                      href="/policies"
+                      className={`text-sm leading-6 ${isDarkPage ? "text-white/50 hover:text-brand-400" : "text-muted-foreground hover:text-primary"}`}
+                    >
+                      Policies
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       href="/contact"
                       className={`text-sm leading-6 ${isDarkPage ? "text-white/50 hover:text-brand-400" : "text-muted-foreground hover:text-primary"}`}
                     >

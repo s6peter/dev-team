@@ -1,155 +1,222 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { sendEmail } from "@/lib/email";
-import { sendSMS } from "@/lib/sms";
+import { z } from "zod";
+import { getAdminStylist } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { stripe } from "@/lib/stripe";
+import { notifyConfirmed, notifyDeclined, type ApptNotice } from "@/lib/notifications";
+import { computePricing } from "@/lib/pricing";
+import { minutesToTime, timeToMinutes } from "@/lib/time";
+import type { Database } from "@/types/database.types";
 
+type ApptUpdate = Database["public"]["Tables"]["appointments"]["Update"];
+type ApptStatus = Database["public"]["Tables"]["appointments"]["Row"]["status"];
+
+const patchSchema = z.object({
+  appointmentId: z.string().uuid(),
+  action: z.enum(["confirm", "decline", "complete", "no_show", "cancel", "revert"]),
+  reason: z.string().max(500).optional(),
+});
+
+const STATUS_BY_ACTION: Record<string, string> = {
+  confirm: "confirmed",
+  decline: "declined",
+  complete: "completed",
+  no_show: "no_show",
+  cancel: "cancelled",
+  revert: "pending",
+};
+
+/** GET /api/admin/appointments?status=pending — stylist-scoped list. */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status");
+  const stylist = await getAdminStylist();
+  if (!stylist) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const status = new URL(request.url).searchParams.get("status");
+  const supabase = createSupabaseAdminClient();
   let query = supabase
     .from("appointments")
-    .select("*, service:services(*), client:clients(*)")
-    .order("date", { ascending: true });
-
-  if (status) {
-    query = query.eq("status", status);
-  }
+    .select(
+      "*, service:services(name,category,duration_minutes), tier:service_tiers(name), client:clients(name,email,phone,tags,allergies,notes,lifetime_spend)"
+    )
+    .eq("stylist_id", stylist.id)
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true });
+  if (status) query = query.eq("status", status);
 
   const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ appointments: data ?? [] });
+}
 
+/** PATCH — confirm/decline/complete/no_show/cancel/revert. Decline & cancel refund. */
+export async function PATCH(request: Request) {
+  const stylist = await getAdminStylist();
+  if (!stylist) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  const { appointmentId, action, reason } = parsed.data;
+
+  const supabase = createSupabaseAdminClient();
+  const { data: appt } = await supabase
+    .from("appointments")
+    .select("*, service:services(name), client:clients(name,email,phone)")
+    .eq("id", appointmentId)
+    .eq("stylist_id", stylist.id) // ownership check
+    .maybeSingle();
+  if (!appt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let refunded = false;
+  if (action === "decline" || action === "cancel") {
+    refunded = await refundDeposit(appointmentId);
+  }
+
+  const update: ApptUpdate = { status: STATUS_BY_ACTION[action] as ApptStatus };
+  if (action === "cancel" || action === "decline") update.cancelled_reason = reason ?? null;
+
+  const { error: updErr } = await supabase
+    .from("appointments")
+    .update(update)
+    .eq("id", appointmentId)
+    .eq("stylist_id", stylist.id);
+  if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+  // Notify client (best effort).
+  const client = appt.client as unknown as { name: string; email: string; phone: string | null } | null;
+  const service = appt.service as unknown as { name: string } | null;
+  if (client?.email) {
+    const notice: ApptNotice = {
+      clientName: client.name,
+      clientEmail: client.email,
+      clientPhone: client.phone,
+      serviceName: service?.name ?? "your appointment",
+      date: appt.date,
+      startTime: appt.start_time,
+      balanceCents: appt.balance_due_cents,
+    };
+    if (action === "confirm") await notifyConfirmed(notice).catch(() => {});
+    else if (action === "decline") await notifyDeclined(notice, refunded).catch(() => {});
+  }
+
+  return NextResponse.json({ ok: true, refunded });
+}
+
+const createSchema = z.object({
+  clientName: z.string().min(1).max(120),
+  clientEmail: z.string().email(),
+  clientPhone: z.string().max(40).optional().default(""),
+  serviceId: z.string().uuid(),
+  tierId: z.string().uuid().nullable().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  status: z.enum(["pending", "confirmed"]).default("confirmed"),
+  depositPaidCents: z.number().int().min(0).optional().default(0),
+});
+
+/** POST — stylist creates an appointment directly on the calendar (walk-in / phone). */
+export async function POST(request: Request) {
+  const stylist = await getAdminStylist();
+  if (!stylist) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const parsed = createSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  const b = parsed.data;
+
+  const supabase = createSupabaseAdminClient();
+  const { data: service } = await supabase
+    .from("services")
+    .select("*")
+    .eq("id", b.serviceId)
+    .eq("stylist_id", stylist.id)
+    .maybeSingle();
+  if (!service) return NextResponse.json({ error: "Service not found" }, { status: 404 });
+
+  let minutes = service.duration_minutes;
+  let tierAddon = 0;
+  if (b.tierId) {
+    const { data: tier } = await supabase
+      .from("service_tiers")
+      .select("price_addon,duration_addon")
+      .eq("id", b.tierId)
+      .maybeSingle();
+    if (tier) {
+      minutes += tier.duration_addon;
+      tierAddon = tier.price_addon;
+    }
+  }
+  const endTime = minutesToTime(timeToMinutes(b.startTime) + minutes);
+  const pricing = computePricing({
+    basePriceCents: service.base_price,
+    tierPriceAddonCents: tierAddon,
+    taxRate: service.tax_rate,
+    depositPercent: service.deposit_percent,
+    requiresDeposit: service.requires_deposit,
+    depositFlatCents: service.deposit_flat_cents,
+  });
+
+  const { data: client, error: cErr } = await supabase
+    .from("clients")
+    .upsert(
+      { stylist_id: stylist.id, name: b.clientName, email: b.clientEmail, phone: b.clientPhone || null },
+      { onConflict: "stylist_id,email" }
+    )
+    .select("id")
+    .single();
+  if (cErr || !client) return NextResponse.json({ error: "Could not save client" }, { status: 500 });
+
+  const { data: appt, error } = await supabase
+    .from("appointments")
+    .insert({
+      client_id: client.id,
+      stylist_id: stylist.id,
+      service_id: b.serviceId,
+      service_tier_id: b.tierId ?? null,
+      date: b.date,
+      start_time: b.startTime,
+      end_time: endTime,
+      status: b.status,
+      service_total_cents: pricing.serviceTotalCents,
+      tax_cents: pricing.taxCents,
+      deposit_cents: pricing.depositCents,
+      balance_due_cents: pricing.balanceDueCents,
+      notes: "Created by stylist",
+    })
+    .select("id")
+    .single();
   if (error) {
+    if (error.code === "23P01") return NextResponse.json({ error: "That time overlaps an existing appointment." }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  if (b.depositPaidCents > 0) {
+    await supabase.from("payments").insert({
+      appointment_id: appt.id,
+      type: "deposit",
+      amount: b.depositPaidCents,
+      status: "completed",
+    });
+  }
+  return NextResponse.json({ ok: true, appointmentId: appt.id });
 }
 
-export async function PATCH(request: Request) {
-  const body = await request.json();
-  const { appointmentId, action } = body;
-
-  // Get appointment details
-  const { data: appointment, error: fetchError } = await supabase
-    .from("appointments")
-    .select("*, service:services(*), client:clients(*)")
-    .eq("id", appointmentId)
-    .single();
-
-  if (fetchError || !appointment) {
-    return NextResponse.json(
-      { error: "Appointment not found" },
-      { status: 404 }
-    );
+async function refundDeposit(appointmentId: string): Promise<boolean> {
+  const supabase = createSupabaseAdminClient();
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("id,stripe_payment_id,status")
+    .eq("appointment_id", appointmentId)
+    .eq("type", "deposit")
+    .eq("status", "completed")
+    .maybeSingle();
+  if (!payment?.stripe_payment_id) return false;
+  try {
+    const refund = await stripe.refunds.create({ payment_intent: payment.stripe_payment_id });
+    await supabase
+      .from("payments")
+      .update({ status: "refunded", stripe_refund_id: refund.id })
+      .eq("id", payment.id);
+    return true;
+  } catch (e) {
+    console.error("refund failed", e);
+    return false;
   }
-
-  let newStatus: string;
-  let emailSubject: string;
-  let emailBody: string;
-  let smsBody: string | null = null;
-
-  switch (action) {
-    case "confirm":
-      newStatus = "confirmed";
-      emailSubject = "Your appointment has been confirmed!";
-      emailBody = `
-        <h1>Appointment Confirmed</h1>
-        <p>Hi ${appointment.client.name},</p>
-        <p>Your appointment for ${appointment.service.name} on ${appointment.date} at ${appointment.start_time} has been confirmed.</p>
-        <p>We look forward to seeing you!</p>
-        <p>Best regards,<br/>QueenG Braids</p>
-      `;
-      smsBody = `QueenG Braids: Your appointment for ${appointment.service.name} on ${appointment.date} at ${appointment.start_time} has been confirmed!`;
-      break;
-
-    case "decline":
-      newStatus = "declined";
-      emailSubject = "Appointment update";
-      emailBody = `
-        <h1>Appointment Update</h1>
-        <p>Hi ${appointment.client.name},</p>
-        <p>We're sorry, but we're unable to accommodate your appointment for ${appointment.service.name} on ${appointment.date} at ${appointment.start_time}.</p>
-        <p>Please contact us to reschedule or visit our booking page.</p>
-        <p>We apologize for the inconvenience.</p>
-        <p>Best regards,<br/>QueenG Braids</p>
-      `;
-      smsBody = `QueenG Braids: We're unable to accommodate your appointment on ${appointment.date}. Please contact us to reschedule.`;
-
-      // Refund deposit
-      const { data: payment } = await supabase
-        .from("payments")
-        .select("stripe_payment_id")
-        .eq("appointment_id", appointmentId)
-        .eq("type", "deposit")
-        .single();
-
-      if (payment?.stripe_payment_id) {
-        const stripe = require("@/lib/stripe").stripe;
-        await stripe.refunds.create({
-          payment_intent: payment.stripe_payment_id,
-        });
-
-        await supabase
-          .from("payments")
-          .update({ status: "refunded" })
-          .eq("appointment_id", appointmentId)
-          .eq("type", "deposit");
-      }
-      break;
-
-    case "complete":
-      newStatus = "completed";
-      emailSubject = "Thank you for your visit!";
-      emailBody = `
-        <h1>Thank You!</h1>
-        <p>Hi ${appointment.client.name},</p>
-        <p>Thank you for visiting QueenG Braids! We hope you love your new ${appointment.service.name}.</p>
-        <p>We'd love to hear your feedback. Please leave us a review!</p>
-        <p>Best regards,<br/>QueenG Braids</p>
-      `;
-      break;
-
-    case "no_show":
-      newStatus = "no_show";
-      emailSubject = "Appointment missed";
-      emailBody = `
-        <h1>Appointment Update</h1>
-        <p>Hi ${appointment.client.name},</p>
-        <p>We noticed you missed your appointment for ${appointment.service.name} on ${appointment.date}.</p>
-        <p>Please contact us if you'd like to reschedule.</p>
-        <p>Best regards,<br/>QueenG Braids</p>
-      `;
-      break;
-
-    default:
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  }
-
-  // Update appointment status
-  const { error: updateError } = await supabase
-    .from("appointments")
-    .update({ status: newStatus })
-    .eq("id", appointmentId);
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
-  }
-
-  // Send notifications
-  if (appointment.client.email) {
-    await sendEmail({
-      to: appointment.client.email,
-      subject: emailSubject,
-      html: emailBody,
-    });
-  }
-
-  if (appointment.client.phone && smsBody) {
-    await sendSMS({
-      to: appointment.client.phone,
-      body: smsBody,
-    });
-  }
-
-  return NextResponse.json({ success: true });
 }

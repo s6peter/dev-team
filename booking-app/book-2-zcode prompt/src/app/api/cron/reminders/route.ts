@@ -1,111 +1,113 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { sendEmail } from "@/lib/email";
-import { sendSMS } from "@/lib/sms";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { addDays, nowInSalonTz, timeToMinutes } from "@/lib/time";
+import {
+  notifyReminder,
+  notifyReviewRequest,
+  type ApptNotice,
+} from "@/lib/notifications";
 
+const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
+
+interface Row {
+  id: string;
+  date: string;
+  start_time: string;
+  balance_due_cents: number;
+  service: { name: string } | null;
+  client: { name: string; email: string; phone: string | null } | null;
+}
+
+const toNotice = (r: Row): ApptNotice => ({
+  clientName: r.client?.name ?? "there",
+  clientEmail: r.client?.email ?? "",
+  clientPhone: r.client?.phone,
+  serviceName: r.service?.name ?? "your appointment",
+  date: r.date,
+  startTime: r.start_time,
+  balanceCents: r.balance_due_cents,
+});
+
+const SELECT =
+  "id,date,start_time,balance_due_cents,service:services(name),client:clients(name,email,phone)";
+
+/**
+ * Cron entrypoint (guarded by CRON_SECRET). Idempotent: each message type is
+ * gated by its *_sent_at column so repeated runs never double-send.
+ * Schedule every ~15-30 min on Vercel Cron.
+ */
 export async function POST(request: Request) {
-  // Verify cron secret
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const auth = request.headers.get("authorization");
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const results = {
-    confirmation24h: 0,
-    reminder2h: 0,
-    errors: [] as string[],
-  };
+  const supabase = createSupabaseAdminClient();
+  const now = nowInSalonTz();
+  const results = { holdsCleaned: 0, sent24h: 0, sent2h: 0, reviewReqs: 0, errors: [] as string[] };
 
-  // Get appointments for tomorrow (24h reminder)
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split("T")[0];
+  const { data: cleaned } = await supabase.rpc("cleanup_expired_holds");
+  results.holdsCleaned = cleaned ?? 0;
 
-  const { data: appointments24h } = await supabase
+  // --- 24h reminders: confirmed appts tomorrow, not yet reminded ---
+  const tomorrow = addDays(now.dateStr, 1);
+  const { data: appts24 } = await supabase
     .from("appointments")
-    .select("*, service:services(*), client:clients(*)")
-    .eq("date", tomorrowStr)
-    .eq("status", "confirmed");
+    .select(SELECT)
+    .eq("stylist_id", STYLIST_ID)
+    .eq("status", "confirmed")
+    .eq("date", tomorrow)
+    .is("reminder_24h_sent_at", null);
+  for (const r of (appts24 ?? []) as unknown as Row[]) {
+    try {
+      await notifyReminder(toNotice(r), "24h");
+      await supabase.from("appointments").update({ reminder_24h_sent_at: new Date().toISOString() }).eq("id", r.id);
+      results.sent24h++;
+    } catch (e) {
+      results.errors.push(`24h ${r.id}: ${e}`);
+    }
+  }
 
-  if (appointments24h) {
-    for (const appointment of appointments24h) {
+  // --- 2h reminders: confirmed appts today starting in ~90-150 min ---
+  const { data: apptsToday } = await supabase
+    .from("appointments")
+    .select(SELECT)
+    .eq("stylist_id", STYLIST_ID)
+    .eq("status", "confirmed")
+    .eq("date", now.dateStr)
+    .is("reminder_2h_sent_at", null);
+  for (const r of (apptsToday ?? []) as unknown as Row[]) {
+    const diff = timeToMinutes(r.start_time) - now.minutes;
+    if (diff >= 90 && diff <= 150) {
       try {
-        // Send 24h confirmation email
-        if (appointment.client?.email) {
-          await sendEmail({
-            to: appointment.client.email,
-            subject: "Appointment Reminder - Tomorrow",
-            html: `
-              <h1>Appointment Reminder</h1>
-              <p>Hi ${appointment.client.name},</p>
-              <p>This is a friendly reminder that you have an appointment tomorrow:</p>
-              <ul>
-                <li><strong>Service:</strong> ${appointment.service.name}</li>
-                <li><strong>Date:</strong> ${appointment.date}</li>
-                <li><strong>Time:</strong> ${appointment.start_time}</li>
-              </ul>
-              <p>Please arrive 10 minutes early. If you need to reschedule, please contact us at least 24 hours in advance.</p>
-              <p>See you tomorrow!</p>
-              <p>Best regards,<br/>QueenG Braids</p>
-            `,
-          });
-        }
-
-        // Send SMS reminder
-        if (appointment.client?.phone) {
-          await sendSMS({
-            to: appointment.client.phone,
-            body: `QueenG Braids Reminder: You have a ${appointment.service.name} appointment tomorrow at ${appointment.start_time}. See you there!`,
-          });
-        }
-
-        results.confirmation24h++;
-      } catch (error) {
-        results.errors.push(`24h reminder failed for ${appointment.id}: ${error}`);
+        await notifyReminder(toNotice(r), "2h");
+        await supabase.from("appointments").update({ reminder_2h_sent_at: new Date().toISOString() }).eq("id", r.id);
+        results.sent2h++;
+      } catch (e) {
+        results.errors.push(`2h ${r.id}: ${e}`);
       }
     }
   }
 
-  // Get appointments in 2 hours
-  const twoHoursLater = new Date(now);
-  twoHoursLater.setHours(twoHoursLater.getHours() + 2);
-  const twoHoursStr = twoHoursLater.toISOString().split("T")[0];
-  const twoHoursTime = twoHoursLater.toTimeString().slice(0, 5);
-
-  const { data: appointments2h } = await supabase
+  // --- Review requests: completed appts not yet asked ---
+  const { data: done } = await supabase
     .from("appointments")
-    .select("*, service:services(*), client:clients(*)")
-    .eq("date", twoHoursStr)
-    .eq("status", "confirmed");
-
-  if (appointments2h) {
-    for (const appointment of appointments2h) {
-      // Check if appointment is within 2-hour window
-      const appointmentTime = appointment.start_time.slice(0, 5);
-      const timeDiff =
-        (parseInt(appointmentTime.split(":")[0]) * 60 +
-          parseInt(appointmentTime.split(":")[1])) -
-        (parseInt(twoHoursTime.split(":")[0]) * 60 +
-          parseInt(twoHoursTime.split(":")[1]));
-
-      if (timeDiff >= 0 && timeDiff <= 120) {
-        try {
-          // Send 2h SMS reminder
-          if (appointment.client?.phone) {
-            await sendSMS({
-              to: appointment.client.phone,
-              body: `QueenG Braids: Your appointment starts in 2 hours! We look forward to seeing you at ${appointment.start_time}.`,
-            });
-          }
-
-          results.reminder2h++;
-        } catch (error) {
-          results.errors.push(`2h reminder failed for ${appointment.id}: ${error}`);
-        }
-      }
+    .select(SELECT)
+    .eq("stylist_id", STYLIST_ID)
+    .eq("status", "completed")
+    .is("review_request_sent_at", null);
+  for (const r of (done ?? []) as unknown as Row[]) {
+    try {
+      await notifyReviewRequest(toNotice(r));
+      await supabase.from("appointments").update({ review_request_sent_at: new Date().toISOString() }).eq("id", r.id);
+      results.reviewReqs++;
+    } catch (e) {
+      results.errors.push(`review ${r.id}: ${e}`);
     }
   }
 
   return NextResponse.json(results);
 }
+
+// Allow manual GET trigger in local dev (same auth).
+export const GET = POST;

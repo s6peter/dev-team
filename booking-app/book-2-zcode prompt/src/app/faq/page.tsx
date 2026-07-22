@@ -1,87 +1,59 @@
-"use client";
-
-import { useState } from "react";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import Link from "next/link";
+import { SITE } from "@/lib/site";
+import { FaqAccordion, type FaqItem } from "./FaqAccordion";
 
-const faqs = [
+export const metadata: Metadata = { title: "FAQ" };
+
+const faqs: FaqItem[] = [
   {
-    question: "How do I book an appointment?",
+    question: "How does booking work?",
     answer:
-      "You can book an appointment by clicking the 'Book Now' button on our website. Select your desired service, choose an available time slot, fill out the intake form, and pay the deposit to secure your appointment.",
+      "It's a few simple steps: pick your style, choose an available date and time, and pay your deposit to hold the slot. Your appointment then comes through as pending until QueenG reviews and approves it, and you'll get a confirmation by email (and text) once it's locked in.",
   },
   {
-    question: "How much is the deposit?",
+    question: "How much is the deposit and is it refundable?",
     answer:
-      "The deposit is typically 50% of the service price plus tax. The remaining balance is paid in person on the day of your appointment.",
+      "A deposit (50% of the service + tax) is required to book and is applied to your total; it's non-refundable within 24 hours of your appointment. The remaining balance is paid in person on the day of your visit.",
   },
   {
-    question: "Can I cancel or reschedule my appointment?",
+    question: "How do I prep my hair before my appointment?",
     answer:
-      "Yes, you can cancel or reschedule your appointment up to 24 hours before your scheduled time. Cancellations within 24 hours may forfeit the deposit.",
+      "Come with your hair freshly washed, fully blow-dried, and detangled from root to tip. Please skip heavy oils, gels, or leave-in build-up. Arriving prepped means we can start on time and get the cleanest, longest-lasting result.",
   },
   {
-    question: "What should I do to prepare for my appointment?",
+    question: "Can I reschedule or cancel?",
     answer:
-      "Come with clean, dry, detangled hair. Avoid heavy oils or products. Specific preparation instructions will be provided when you book your service.",
+      "Yes. You can reschedule or cancel for free up to 48 hours before your appointment, and your deposit moves with you to the new date. Inside 24 hours, the deposit is forfeited since the time was reserved just for you.",
+  },
+  {
+    question: "Will I get a reminder before my appointment?",
+    answer:
+      "Yes. Once your appointment is confirmed, you'll automatically receive a reminder about 24 hours before and again a couple of hours before your start time by email and text, so the details stay handy. After your visit, you may also get a quick note inviting you to leave a review.",
+  },
+  {
+    question: "What payment methods do you accept?",
+    answer:
+      "Your deposit is paid securely online at booking (major cards, plus Apple Pay and Google Pay through our checkout). The remaining balance is paid in person on the day of your appointment.",
   },
   {
     question: "How long do braids last?",
     answer:
-      "With proper care, braids can last 4-8 weeks depending on the style, your hair type, and how well you maintain them. We provide care instructions with every service.",
-  },
-  {
-    question: "Do you offer touch-ups or maintenance?",
-    answer:
-      "Yes, we offer touch-up services for existing braids. Contact us to schedule a maintenance appointment.",
-  },
-  {
-    question: "What forms of payment do you accept?",
-    answer:
-      "We accept all major credit cards, debit cards, and digital payments like Apple Pay and Google Pay through our secure online payment system.",
-  },
-  {
-    question: "Is there parking available?",
-    answer:
-      "Yes, there is street parking available near our location, as well as a parking lot within walking distance.",
+      "With good care, most protective styles hold up for around 4 to 8 weeks depending on the style, your hair type, and your maintenance routine. You'll get aftercare tips to help your look last as long as possible.",
   },
   {
     question: "Do you offer consultations?",
     answer:
-      "Yes, we offer free consultations to discuss your desired style, hair health, and any concerns you may have. You can schedule a consultation or discuss during your appointment.",
+      "Absolutely. If you're unsure which style or length is right for you, reach out before booking and we'll talk through options, prep, and pricing so you know exactly what to expect.",
   },
   {
-    question: "What if I'm not satisfied with my service?",
-    answer:
-      "Your satisfaction is our priority. If you're not happy with your service, please let us know and we'll work with you to make it right.",
+    question: "What if I have questions before I book?",
+    answer: `The fastest way to reach QueenG is by phone at ${SITE.phone} or by email at ${SITE.email}. You can also send a message on Instagram @${SITE.instagram}.`,
   },
 ];
-
-function FAQItem({ question, answer }: { question: string; answer: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="border-b">
-      <button
-        className="flex w-full items-center justify-between py-4 text-left"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span className="font-medium">{question}</span>
-        {isOpen ? (
-          <ChevronUp className="h-5 w-5 text-muted-foreground flex-shrink-0 ml-4" />
-        ) : (
-          <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0 ml-4" />
-        )}
-      </button>
-      {isOpen && (
-        <div className="pb-4 text-muted-foreground">{answer}</div>
-      )}
-    </div>
-  );
-}
 
 export default function FAQPage() {
   return (
@@ -90,15 +62,18 @@ export default function FAQPage() {
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="py-24 sm:py-32">
+        <section className="py-20 sm:py-28">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">
-              <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
+              <p className="text-sm font-semibold uppercase tracking-wide text-brand-500">
+                Good to know
+              </p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
                 Frequently Asked Questions
               </h1>
               <p className="mt-6 text-lg leading-8 text-muted-foreground">
-                Find answers to common questions about our services and booking
-                process.
+                Everything you need to know about booking, deposits, prep, and
+                what to expect at {SITE.shortName}.
               </p>
             </div>
           </div>
@@ -107,23 +82,25 @@ export default function FAQPage() {
         {/* FAQ List */}
         <section className="pb-24 sm:pb-32">
           <div className="mx-auto max-w-3xl px-6 lg:px-8">
-            <div className="space-y-0">
-              {faqs.map((faq, index) => (
-                <FAQItem
-                  key={index}
-                  question={faq.question}
-                  answer={faq.answer}
-                />
-              ))}
-            </div>
+            <FaqAccordion items={faqs} />
 
-            <div className="mt-12 text-center">
-              <p className="text-muted-foreground mb-4">
+            <div className="mt-14 rounded-2xl border border-border bg-muted/40 p-8 text-center">
+              <p className="text-lg font-semibold text-foreground">
                 Still have questions?
               </p>
-              <Link href="/contact">
-                <Button>Contact Us</Button>
-              </Link>
+              <p className="mt-2 text-muted-foreground">
+                Reach out and we&apos;ll help you find the right style and time.
+              </p>
+              <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <Link href="/book">
+                  <Button className="bg-brand-500 hover:bg-brand-600 text-white">
+                    Book Now
+                  </Button>
+                </Link>
+                <Link href="/contact">
+                  <Button variant="outline">Contact Us</Button>
+                </Link>
+              </div>
             </div>
           </div>
         </section>
