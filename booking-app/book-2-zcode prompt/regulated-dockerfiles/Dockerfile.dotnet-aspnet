@@ -1,0 +1,114 @@
+# syntax=docker/dockerfile:1.10
+# check=error=true
+# =============================================================================
+# .NET 8 / ASP.NET Core  —  heavily used in insurance (policy admin, claims),
+# healthcare payers, and US federal/state government systems.
+#
+# Controls demonstrated:
+#   CIS Docker 4.1, 4.2, 4.9, 4.10 | NIST SP 800-190 §4.1, §4.5
+#   HIPAA 164.312(b) audit controls | FedRAMP CM-2 / SI-7 (integrity)
+#
+# Build:
+#   docker buildx build \
+#     --build-arg VERSION=3.11.0 --build-arg VCS_REF=$(git rev-parse HEAD) \
+#     --secret id=nuget_config,src=./nuget.internal.config \
+#     --sbom=true --provenance=mode=max -t claims-api:3.11.0 .
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# STAGE 1 — restore + publish
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/dotnet-sdk:latest-dev AS build
+
+USER root
+RUN mkdir -p /src && chown 65532:65532 /src
+USER 65532:65532
+
+WORKDIR /src
+
+# Telemetry off: outbound calls from build agents are a finding in air-gapped
+# and FedRAMP-boundary environments.
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+
+# Project files only -> the restore layer caches independently of source.
+COPY --chown=65532:65532 *.sln ./
+COPY --chown=65532:65532 src/Claims.Api/*.csproj      src/Claims.Api/
+COPY --chown=65532:65532 src/Claims.Domain/*.csproj   src/Claims.Domain/
+COPY --chown=65532:65532 tests/Claims.Tests/*.csproj  tests/Claims.Tests/
+
+# --locked-mode fails the build if packages.lock.json does not match the
+# csproj. This is the .NET equivalent of a hash-pinned lockfile and is what
+# makes the dependency graph reproducible and auditable.
+# The internal-feed PAT arrives as a mounted secret and never enters a layer.
+RUN --mount=type=cache,target=/home/nonroot/.nuget/packages,uid=65532,gid=65532 \
+    --mount=type=secret,id=nuget_config,target=/tmp/nuget.config,uid=65532,required=false \
+    dotnet restore --locked-mode --configfile /tmp/nuget.config
+
+COPY --chown=65532:65532 . .
+
+RUN --mount=type=cache,target=/home/nonroot/.nuget/packages,uid=65532,gid=65532 \
+    dotnet test --no-restore -c Release --logger "trx;LogFileName=results.trx"
+
+# ContinuousIntegrationBuild + deterministic build => byte-reproducible output,
+# which is what lets you re-verify a released artifact years later.
+RUN --mount=type=cache,target=/home/nonroot/.nuget/packages,uid=65532,gid=65532 \
+    dotnet publish src/Claims.Api/Claims.Api.csproj \
+      --no-restore -c Release -o /src/publish \
+      /p:UseAppHost=false \
+      /p:ContinuousIntegrationBuild=true \
+      /p:Deterministic=true \
+      /p:DebugType=none
+
+
+# -----------------------------------------------------------------------------
+# STAGE 2 — runtime
+#
+# aspnet-runtime carries the ASP.NET shared framework and nothing else:
+# no SDK, no MSBuild, no NuGet cache, no shell.
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/aspnet-runtime:latest AS runtime
+
+ARG VERSION=0.0.0-dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+
+LABEL org.opencontainers.image.title="claims-api" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://git.internal.example/claims/api" \
+      org.opencontainers.image.vendor="Example Assurance Ltd" \
+      io.internal.app-id="APP-20913" \
+      io.internal.data-classification="phi" \
+      io.internal.owner="claims-platform@example.com"
+
+WORKDIR /app
+
+COPY --from=build --chown=65532:65532 --chmod=0444 /src/publish/ ./
+
+# Bind above 1024 so the container never needs NET_BIND_SERVICE.
+ENV ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_ENVIRONMENT=Production \
+    DOTNET_NOLOGO=1 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    # Closes the diagnostic IPC socket. Left on, it allows in-container memory
+    # dumps of a process holding PHI/PCI in the heap.
+    DOTNET_EnableDiagnostics=0
+
+# NOTE: ENV values are visible in `docker inspect`. Connection strings, keys,
+# and tokens go in a secrets manager and arrive at runtime — never here.
+
+USER 65532:65532
+
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+
+# No shell for a HEALTHCHECK, and Kubernetes ignores it regardless.
+# Use the ASP.NET health-check middleware plus:
+#   livenessProbe:  httpGet /healthz/live
+#   readinessProbe: httpGet /healthz/ready
+
+ENTRYPOINT ["dotnet", "/app/Claims.Api.dll"]

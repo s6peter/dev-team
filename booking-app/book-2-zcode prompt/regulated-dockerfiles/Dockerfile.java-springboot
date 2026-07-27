@@ -1,0 +1,130 @@
+# syntax=docker/dockerfile:1.10
+# check=error=true
+# =============================================================================
+# Java 21 / Spring Boot  —  the dominant stack in retail & investment banking,
+# core insurance policy admin, and claims processing.
+#
+# Controls demonstrated:
+#   CIS Docker 4.1 (non-root)     4.2 (trusted base)   4.6 (healthcheck)
+#   CIS Docker 4.9 (COPY not ADD) 4.10 (no baked secrets)
+#   PCI-DSS 6.3.2 / 6.5.x, HIPAA 164.312(a)(1), NIST SP 800-190 §4.1, §4.5
+#
+# Build:
+#   docker buildx build \
+#     --build-arg VERSION=1.4.2 \
+#     --build-arg VCS_REF=$(git rev-parse HEAD) \
+#     --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+#     --secret id=maven_settings,src=$HOME/.m2/settings.xml \
+#     --sbom=true --provenance=mode=max \
+#     -t registry.internal.bank/payments/api:1.4.2 .
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# STAGE 1 — build
+#
+# Toolchain lives here and NEVER reaches the runtime image: no Maven, no JDK,
+# no compilers, no source, no build credentials. This is the single biggest
+# lever on your CVE count and therefore on your remediation-SLA reporting.
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/maven:latest AS build
+
+# The *-dev / toolchain images ship a shell and apk. Never assume the default
+# user — declare it. Escalate only long enough to create a writable workspace.
+USER root
+RUN mkdir -p /build && chown 65532:65532 /build
+USER 65532:65532
+
+WORKDIR /build
+
+# Copy the manifest alone first so the dependency layer caches independently
+# of source changes. Explicit --chown avoids root-owned files in the layer.
+COPY --chown=65532:65532 pom.xml ./
+
+# Secrets are MOUNTED, never COPYed and never passed via ARG/ENV.
+# A BuildKit secret mount exists only for the life of this RUN: it is not in
+# the layer, not in `docker history`, not in the exported image.
+# required=false lets local builds run without the internal Nexus credential.
+RUN --mount=type=cache,target=/home/nonroot/.m2/repository,uid=65532,gid=65532 \
+    --mount=type=secret,id=maven_settings,target=/tmp/settings.xml,uid=65532,required=false \
+    mvn -B -ntp -s /tmp/settings.xml dependency:go-offline
+
+COPY --chown=65532:65532 src ./src
+
+# Tests, SpotBugs, and the OWASP dependency check run INSIDE the build so a
+# failing control breaks the image, not just the pipeline dashboard.
+RUN --mount=type=cache,target=/home/nonroot/.m2/repository,uid=65532,gid=65532 \
+    mvn -B -ntp verify \
+ && cp target/*.jar /build/app.jar
+
+# Optional hardening step for institutions that must justify every byte:
+# jlink a custom runtime containing only the modules the app resolves, then
+# base the runtime stage on chainguard/static instead of jre.
+#   RUN jlink --add-modules $(jdeps --print-module-deps --ignore-missing-deps app.jar) \
+#             --strip-debug --no-man-pages --no-header-files --compress=2 \
+#             --output /build/jre
+
+
+# -----------------------------------------------------------------------------
+# STAGE 2 — runtime
+#
+# chainguard/jre: no shell, no package manager, no busybox, no setuid binaries.
+# An attacker who achieves RCE lands in an environment with nothing to pivot
+# with. This is what "minimal attack surface" means to an assessor.
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/jre:latest AS runtime
+
+# Pin by digest in production. Tags are mutable; digests are not. Immutability
+# is what makes "the artifact we tested is the artifact we deployed" provable.
+#   FROM cgr.dev/chainguard/jre:latest@sha256:<digest> AS runtime
+
+ARG VERSION=0.0.0-dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+
+# Provenance metadata. This is how an image maps back to a change ticket during
+# a SOX walkthrough, and how your SBOM pipeline attributes findings to a team.
+LABEL org.opencontainers.image.title="payments-api" \
+      org.opencontainers.image.description="Card authorisation service" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://git.internal.bank/payments/api" \
+      org.opencontainers.image.vendor="Example Bank plc" \
+      org.opencontainers.image.licenses="Proprietary" \
+      io.internal.app-id="APP-04412" \
+      io.internal.data-classification="pci-chd" \
+      io.internal.owner="payments-platform@example.bank"
+
+WORKDIR /app
+
+# COPY, never ADD. ADD can fetch remote URLs and auto-extracts archives
+# (tar-slip / path-traversal risk) — CIS 4.9, and a hard ban in most banks.
+COPY --from=build --chown=65532:65532 --chmod=0444 /build/app.jar /app/app.jar
+
+# Numeric UID, not a username. Kubernetes `runAsNonRoot` can only verify a
+# numeric UID; a name forces the kubelet to trust the image metadata.
+USER 65532:65532
+
+# Documentation only — EXPOSE publishes nothing and is not a network control.
+EXPOSE 8443
+
+# Exec form => the JVM is PID 1 => SIGTERM reaches it directly => Spring's
+# graceful shutdown drains in-flight transactions and flushes the audit log.
+STOPSIGNAL SIGTERM
+
+# Docker HEALTHCHECK is deliberately omitted here: a distroless JRE has no
+# shell or curl, and spawning a second JVM per probe is prohibitively slow.
+# Kubernetes ignores HEALTHCHECK anyway — use Actuator probes in the manifest:
+#   livenessProbe:  httpGet /actuator/health/liveness
+#   readinessProbe: httpGet /actuator/health/readiness
+# If your control framework literally mandates CIS 4.6, ship a static Go
+# health binary alongside the jar and point HEALTHCHECK at that.
+
+ENTRYPOINT ["java", \
+            "-XX:MaxRAMPercentage=75.0", \
+            "-XX:+ExitOnOutOfMemoryError", \
+            "-XX:+UseZGC", \
+            "-Djava.awt.headless=true", \
+            "-Dfile.encoding=UTF-8", \
+            "-jar", "/app/app.jar"]

@@ -1,0 +1,116 @@
+# syntax=docker/dockerfile:1.10
+# check=error=true
+# =============================================================================
+# Node.js 22 / Next.js  —  customer-facing portals: online banking, member and
+# patient portals, claims self-service, citizen-facing gov services.
+#
+# npm is the highest-risk supply chain in regulated software (typosquatting,
+# dependency confusion, malicious postinstall scripts). The three controls that
+# matter are `npm ci`, `--ignore-scripts`, and standalone output — all below.
+#
+# Controls demonstrated:
+#   CIS Docker 4.1, 4.2, 4.3, 4.9, 4.10 | NIST SP 800-190 §4.1
+#   PCI-DSS 6.3.2 / 6.4.3 (client-side scripts) | HIPAA 164.312(e)(1)
+#
+# Requires `output: "standalone"` in next.config.js.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# STAGE 1 — dependencies
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/node:latest-dev AS deps
+
+USER root
+RUN mkdir -p /app && chown 65532:65532 /app
+USER 65532:65532
+
+WORKDIR /app
+
+COPY --chown=65532:65532 package.json package-lock.json ./
+
+# `npm ci` (not `npm install`) installs exactly the lockfile and fails if
+# package.json and the lock disagree — the reproducibility control.
+#
+# `--ignore-scripts` blocks pre/post-install hooks. This is the single most
+# effective npm supply-chain control: the overwhelming majority of malicious
+# packages execute via a postinstall script. If a legitimate dependency needs
+# to build, allowlist it explicitly rather than turning this off globally.
+RUN --mount=type=cache,target=/home/node/.npm,uid=65532,gid=65532 \
+    --mount=type=secret,id=npmrc,target=/app/.npmrc,uid=65532,required=false \
+    npm ci --ignore-scripts --no-audit --fund=false
+
+# Fail the build on known-vulnerable transitive deps rather than discovering
+# them in a quarterly scan report.
+RUN npm audit --audit-level=high --omit=dev
+
+
+# -----------------------------------------------------------------------------
+# STAGE 2 — build
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/node:latest-dev AS build
+
+USER root
+RUN mkdir -p /app && chown 65532:65532 /app
+USER 65532:65532
+
+WORKDIR /app
+
+COPY --from=deps --chown=65532:65532 /app/node_modules ./node_modules
+COPY --chown=65532:65532 . .
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+# NOTE ON NEXT_PUBLIC_* VARS: anything prefixed NEXT_PUBLIC_ is inlined into
+# the client bundle at build time and is therefore PUBLIC FOREVER. Never put a
+# key, token, or internal hostname behind that prefix. This is a recurring
+# finding in portal penetration tests.
+RUN npm run build
+
+
+# -----------------------------------------------------------------------------
+# STAGE 3 — runtime
+#
+# Standalone output ships a minimal server plus only the node_modules actually
+# reachable from the build graph — typically a ~90% size cut versus copying the
+# full dependency tree, and a proportional cut in CVE surface.
+# -----------------------------------------------------------------------------
+FROM cgr.dev/chainguard/node:latest AS runtime
+
+ARG VERSION=0.0.0-dev
+ARG VCS_REF=unknown
+ARG BUILD_DATE=1970-01-01T00:00:00Z
+
+LABEL org.opencontainers.image.title="member-portal" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://git.internal.example/digital/member-portal" \
+      org.opencontainers.image.vendor="Example Health Plan" \
+      io.internal.app-id="APP-51884" \
+      io.internal.data-classification="phi" \
+      io.internal.owner="digital-channels@example.health"
+
+WORKDIR /app
+
+COPY --from=build --chown=65532:65532 /app/public              ./public
+COPY --from=build --chown=65532:65532 /app/.next/standalone    ./
+COPY --from=build --chown=65532:65532 /app/.next/static        ./.next/static
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=8080 \
+    HOSTNAME=0.0.0.0
+
+USER 65532:65532
+
+EXPOSE 8080
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:8080/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+
+# `node server.js`, not `npm start`: npm would sit between the init system and
+# the app, swallow SIGTERM, and prevent a graceful drain.
+ENTRYPOINT ["node", "server.js"]

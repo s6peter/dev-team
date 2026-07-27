@@ -1,0 +1,82 @@
+# =============================================================================
+# .dockerignore  —  copy to your repo root as `.dockerignore`
+#
+# This file is a SECURITY CONTROL, not an optimisation. Without it, a bare
+# `COPY . .` sweeps .git (full history, including secrets that were committed
+# and later "removed"), .env files, cloud credentials, and SSH keys into a
+# layer. Those layers are then pushed to the registry and are readable by
+# anyone who can pull the image.
+#
+# Rule of thumb for regulated work: deny by default, allow explicitly.
+# =============================================================================
+
+# --- Secrets and credentials (the critical entries) --------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+id_rsa*
+.npmrc
+.netrc
+.pypirc
+.aws/
+.azure/
+.gcloud/
+.kube/
+secrets/
+**/appsettings.Development.json
+**/application-local.yml
+
+# --- VCS history -------------------------------------------------------------
+.git
+.gitignore
+.gitattributes
+.github/
+.gitlab-ci.yml
+
+# --- Build outputs and dependency trees (rebuilt inside the image) -----------
+node_modules/
+.next/
+dist/
+build/
+out/
+target/
+bin/
+obj/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# --- Local tooling and IDE ---------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.direnv/
+
+# --- Test, coverage, docs ----------------------------------------------------
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+TestResults/
+docs/
+*.md
+!README.md
+
+# --- Container and orchestration files ---------------------------------------
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+k8s/
+helm/
