@@ -1,6 +1,0 @@
-app:
-  name: my-app
-  env: dev
-  host: http://localhost:3000
-  apiScan: true
-

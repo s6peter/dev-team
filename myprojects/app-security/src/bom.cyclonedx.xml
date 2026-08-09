@@ -1,2 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<bom xmlns="http://cyclonedx.org/schema/bom/1.6" serialNumber="urn:uuid:fd02a149-79f0-430f-a452-a3f28d4e8cec" version="1"><metadata><timestamp>2025-10-04T18:03:38-05:00</timestamp><tools><components><component type="application"><author>anchore</author><name>syft</name><version>1.32.0</version></component></components></tools><component bom-ref="029a83456a79edff" type="file"><name>./assets</name></component></metadata></bom>
