@@ -63,3 +63,15 @@ export function formatDateLabel(dateStr: string): string {
     timeZone: "UTC",
   });
 }
+
+/** Hours from now until a salon-local date+time, computed in the salon timezone
+ *  (independent of the server's timezone). Positive = in the future. */
+export function hoursUntilSalon(dateStr: string, time: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [hh, mm] = time.slice(0, 5).split(":").map(Number);
+  const apptUtc = Date.UTC(y, m - 1, d, hh, mm);
+  const now = nowInSalonTz();
+  const [ny, nm, nd] = now.dateStr.split("-").map(Number);
+  const nowUtc = Date.UTC(ny, nm - 1, nd, Math.floor(now.minutes / 60), now.minutes % 60);
+  return (apptUtc - nowUtc) / 3.6e6;
+}

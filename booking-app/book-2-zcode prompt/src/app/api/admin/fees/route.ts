@@ -22,12 +22,14 @@ export async function GET(request: Request) {
   const supabase = createSupabaseAdminClient();
   const { data: appt } = await supabase
     .from("appointments")
-    .select("service_total_cents,stripe_payment_method_id")
+    .select("service_total_cents,deposit_cents,stripe_payment_method_id")
     .eq("id", appointmentId).eq("stylist_id", stylist.id).maybeSingle();
   if (!appt) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { data: policy } = await supabase.from("cancellation_policy").select("no_show_fee_percent,late_cancel_fee_percent").eq("stylist_id", stylist.id).maybeSingle();
   const pct = kind === "no_show" ? Number(policy?.no_show_fee_percent ?? 100) : Number(policy?.late_cancel_fee_percent ?? 100);
-  return NextResponse.json({ feeCents: Math.round(appt.service_total_cents * pct / 100), hasCard: Boolean(appt.stripe_payment_method_id) });
+  const grossCents = Math.round(appt.service_total_cents * pct / 100);
+  const feeCents = Math.max(0, grossCents - appt.deposit_cents); // net the deposit already held
+  return NextResponse.json({ feeCents, grossCents, depositHeldCents: appt.deposit_cents, hasCard: Boolean(appt.stripe_payment_method_id) });
 }
 
 /** POST — charge the saved card off-session for a no-show / late-cancel / custom fee. */
@@ -41,9 +43,13 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdminClient();
   const { data: appt } = await supabase
     .from("appointments")
-    .select("id,service_total_cents,stripe_payment_method_id,fee_charged_cents,client:clients(stripe_customer_id,email,name)")
+    .select("id,service_total_cents,deposit_cents,stripe_payment_method_id,fee_charged_cents,client:clients(stripe_customer_id,email,name)")
     .eq("id", appointmentId).eq("stylist_id", stylist.id).maybeSingle();
   if (!appt) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (appt.fee_charged_cents > 0) {
+    return NextResponse.json({ error: "A fee has already been charged for this appointment." }, { status: 409 });
+  }
 
   const client = appt.client as unknown as { stripe_customer_id: string | null; email: string; name: string } | null;
   if (!appt.stripe_payment_method_id || !client?.stripe_customer_id) {
@@ -54,7 +60,10 @@ export async function POST(request: Request) {
   if (!amountCents) {
     const { data: policy } = await supabase.from("cancellation_policy").select("no_show_fee_percent,late_cancel_fee_percent").eq("stylist_id", stylist.id).maybeSingle();
     const pct = kind === "no_show" ? Number(policy?.no_show_fee_percent ?? 100) : Number(policy?.late_cancel_fee_percent ?? 100);
-    feeCents = Math.round(appt.service_total_cents * pct / 100);
+    feeCents = Math.max(0, Math.round(appt.service_total_cents * pct / 100) - appt.deposit_cents); // net the deposit already held
+  }
+  if (feeCents < 50 && !amountCents) {
+    return NextResponse.json({ error: "The deposit already held covers this fee." }, { status: 400 });
   }
   if (feeCents < 50) return NextResponse.json({ error: "Fee amount too small." }, { status: 400 });
 
@@ -68,7 +77,7 @@ export async function POST(request: Request) {
       confirm: true,
       description: `${kind.replace("_", " ")} fee — ${client.name}`,
       metadata: { appointment_id: appointmentId, kind: `fee_${kind}` },
-    });
+    }, { idempotencyKey: `fee_${appointmentId}_${kind}_${feeCents}` });
     await supabase.from("payments").insert({
       appointment_id: appointmentId, type: "fee", amount: feeCents, stripe_payment_id: pi.id, status: pi.status === "succeeded" ? "completed" : "pending",
     });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rescheduleAppointment } from "@/lib/reschedule";
 import { stripe } from "@/lib/stripe";
+import { hoursUntilSalon } from "@/lib/time";
 
 const schema = z.object({
   token: z.string().uuid(),
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   // cancel: refund deposit only if outside the notice window
   const { data: policy } = await supabase
     .from("cancellation_policy").select("cancel_notice_hours").eq("stylist_id", appt.stylist_id).maybeSingle();
-  const hoursUntil = (new Date(`${appt.date}T${appt.start_time}`).getTime() - Date.now()) / 3.6e6;
+  const hoursUntil = hoursUntilSalon(appt.date, appt.start_time);
   let refunded = false;
   if (hoursUntil >= (policy?.cancel_notice_hours ?? 24)) {
     const { data: payment } = await supabase

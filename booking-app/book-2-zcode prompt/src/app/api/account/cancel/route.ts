@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
+import { hoursUntilSalon } from "@/lib/time";
 
 const schema = z.object({ appointmentId: z.string().uuid() });
 
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     .eq("stylist_id", appt.stylist_id)
     .maybeSingle();
 
-  const hoursUntil = (new Date(`${appt.date}T${appt.start_time}`).getTime() - Date.now()) / 3.6e6;
+  const hoursUntil = hoursUntilSalon(appt.date, appt.start_time);
   const withinWindow = hoursUntil < (policy?.cancel_notice_hours ?? 24);
 
   let refunded = false;
