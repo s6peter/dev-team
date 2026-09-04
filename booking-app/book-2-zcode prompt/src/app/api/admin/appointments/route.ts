@@ -6,6 +6,7 @@ import { stripe } from "@/lib/stripe";
 import { notifyConfirmed, notifyDeclined, type ApptNotice } from "@/lib/notifications";
 import { computePricing } from "@/lib/pricing";
 import { minutesToTime, timeToMinutes } from "@/lib/time";
+import { rescheduleAppointment } from "@/lib/reschedule";
 import type { Database } from "@/types/database.types";
 
 type ApptUpdate = Database["public"]["Tables"]["appointments"]["Update"];
@@ -219,4 +220,21 @@ async function refundDeposit(appointmentId: string): Promise<boolean> {
     console.error("refund failed", e);
     return false;
   }
+}
+
+const rescheduleSchema = z.object({
+  appointmentId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+/** PUT — admin reschedules an appointment (no client-policy restriction). */
+export async function PUT(request: Request) {
+  const stylist = await getAdminStylist();
+  if (!stylist) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const parsed = rescheduleSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  const result = await rescheduleAppointment(parsed.data.appointmentId, parsed.data.date, parsed.data.startTime, { stylistId: stylist.id });
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ ok: true });
 }

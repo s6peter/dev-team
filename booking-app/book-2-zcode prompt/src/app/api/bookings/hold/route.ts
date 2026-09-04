@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { stripe, stripeConfigured } from "@/lib/stripe";
+import { stripe, stripeConfigured, ensureStripeCustomer } from "@/lib/stripe";
 import { materializeFreeBooking } from "@/lib/booking";
 
 const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
@@ -96,11 +96,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Payments are not configured." }, { status: 503 });
   }
 
+  const customerId = await ensureStripeCustomer(b.clientEmail, b.clientName);
   const pi = await stripe.paymentIntents.create({
     amount: h.deposit_cents + h.tax_cents, // deposit + tax-on-deposit
     currency: "usd",
+    customer: customerId,
+    setup_future_usage: "off_session", // save the card for no-show / late-cancel fees
     automatic_payment_methods: { enabled: true },
-    metadata: { hold_id: h.id, stylist_id: STYLIST_ID, kind: "deposit" },
+    metadata: { hold_id: h.id, stylist_id: STYLIST_ID, kind: "deposit", customer_id: customerId },
   });
 
   await supabase.from("slot_holds").update({ stripe_payment_intent_id: pi.id }).eq("id", h.id);

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, LogOut, Star } from "lucide-react";
+import { CalendarDays, LogOut, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { formatCents } from "@/lib/pricing";
 import { formatDateLabel, formatTimeLabel } from "@/lib/time";
+import { ReschedulePicker } from "@/components/ReschedulePicker";
 
 export interface AccountAppointment {
   id: string;
@@ -15,8 +16,11 @@ export interface AccountAppointment {
   start_time: string;
   status: string;
   serviceName: string;
+  serviceId: string;
+  minutes: number;
   depositCents: number;
   balanceCents: number;
+  manageToken: string;
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -33,6 +37,7 @@ export function AccountClient({ email, appointments }: { email: string; appointm
   const params = useSearchParams();
   const [busy, setBusy] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(params.get("review") === "1");
+  const [rescheduling, setRescheduling] = useState<AccountAppointment | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = appointments.filter((a) => a.date >= today && ["pending", "confirmed"].includes(a.status));
@@ -57,6 +62,24 @@ export function AccountClient({ email, appointments }: { email: string; appointm
     if (!res.ok) alert(data.error || "Could not cancel.");
     else {
       alert(data.refunded ? "Cancelled — your deposit was refunded." : "Cancelled. (Deposit forfeit per policy.)");
+      router.refresh();
+    }
+  }
+
+  async function reschedule(date: string, startTime: string) {
+    if (!rescheduling) return;
+    setBusy(rescheduling.id);
+    const res = await fetch("/api/account/reschedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId: rescheduling.id, date, startTime }),
+    });
+    const data = await res.json();
+    setBusy(null);
+    if (!res.ok) alert(data.error || "Could not reschedule.");
+    else {
+      setRescheduling(null);
+      alert(`Rescheduled to ${formatDateLabel(date)} at ${formatTimeLabel(startTime)}.`);
       router.refresh();
     }
   }
@@ -94,8 +117,9 @@ export function AccountClient({ email, appointments }: { email: string; appointm
                   {a.balanceCents > 0 && <div className="text-sm text-muted-foreground">Balance due in person: {formatCents(a.balanceCents)}</div>}
                 </div>
                 <div className="flex gap-2">
-                  <Link href="/book"><Button variant="outline" size="sm">Reschedule</Button></Link>
+                  <Button variant="outline" size="sm" onClick={() => setRescheduling(a)}>Reschedule</Button>
                   <Button variant="outline" size="sm" disabled={busy === a.id} onClick={() => cancel(a.id)}>Cancel</Button>
+                  <a href={`/api/ics/${a.manageToken}`}><Button variant="outline" size="sm">Add to calendar</Button></a>
                 </div>
               </div>
             ))}
@@ -119,6 +143,19 @@ export function AccountClient({ email, appointments }: { email: string; appointm
           </div>
         )}
       </section>
+
+      {rescheduling && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setRescheduling(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Reschedule {rescheduling.serviceName}</h3>
+              <button onClick={() => setRescheduling(null)} aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+            <ReschedulePicker serviceId={rescheduling.serviceId} minutes={rescheduling.minutes} onConfirm={reschedule} submitting={busy === rescheduling.id} />
+            <p className="mt-2 text-xs text-muted-foreground">You may reschedule once, at least 24 hours ahead.</p>
+          </div>
+        </div>
+      )}
 
       {reviewOpen && <ReviewModal onClose={() => setReviewOpen(false)} />}
     </div>

@@ -14,6 +14,7 @@ interface Row {
   date: string;
   start_time: string;
   balance_due_cents: number;
+  manage_token: string | null;
   service: { name: string } | null;
   client: { name: string; email: string; phone: string | null } | null;
 }
@@ -26,10 +27,11 @@ const toNotice = (r: Row): ApptNotice => ({
   date: r.date,
   startTime: r.start_time,
   balanceCents: r.balance_due_cents,
+  manageToken: r.manage_token,
 });
 
 const SELECT =
-  "id,date,start_time,balance_due_cents,service:services(name),client:clients(name,email,phone)";
+  "id,date,start_time,balance_due_cents,manage_token,service:services(name),client:clients(name,email,phone)";
 
 /**
  * Cron entrypoint (guarded by CRON_SECRET). Idempotent: each message type is

@@ -27,9 +27,15 @@ export interface ApptNotice {
   startTime: string; // HH:MM
   depositCents?: number;
   balanceCents?: number;
+  manageToken?: string | null;
 }
 
 const when = (a: ApptNotice) => `${formatDateLabel(a.date)} at ${formatTimeLabel(a.startTime)}`;
+const manageLink = (a: ApptNotice) =>
+  a.manageToken
+    ? `<p><a href="${APP_URL}/manage/${a.manageToken}" style="color:#db2777">Reschedule or cancel →</a></p>
+       <p><a href="${APP_URL}/api/ics/${a.manageToken}" style="color:#db2777">Add to calendar →</a></p>`
+    : "";
 
 /** Instant "deposit received, pending approval" confirmation. */
 export async function notifyBookingReceived(a: ApptNotice) {
@@ -41,7 +47,8 @@ export async function notifyBookingReceived(a: ApptNotice) {
     <p>Your appointment is <strong>pending approval</strong> — QueenG will confirm shortly.
     ${a.balanceCents ? `The remaining balance of <strong>${formatCents(a.balanceCents)}</strong> is due in person.` : ""}</p>
     <p>Please arrive with hair washed, blow-dried and detangled.</p>
-    <p><a href="${APP_URL}/account" style="color:#db2777">View your appointment →</a></p>`;
+    <p><a href="${APP_URL}/account" style="color:#db2777">View your appointment →</a></p>
+    ${manageLink(a)}`;
   await Promise.all([
     sendEmail({ to: a.clientEmail, subject: "We got your booking request!", html: shell("Booking request received", body) }),
     a.clientPhone
@@ -55,7 +62,8 @@ export async function notifyConfirmed(a: ApptNotice) {
     <p>Great news — your appointment is <strong>confirmed</strong>! ✅</p>
     <p><strong>${a.serviceName}</strong><br/>${when(a)}</p>
     ${a.balanceCents ? `<p>Balance due in person: <strong>${formatCents(a.balanceCents)}</strong></p>` : ""}
-    <p>See you soon!</p>`;
+    <p>See you soon!</p>
+    ${manageLink(a)}`;
   await Promise.all([
     sendEmail({ to: a.clientEmail, subject: "Your appointment is confirmed!", html: shell("Appointment confirmed", body) }),
     a.clientPhone ? sendSMS({ to: a.clientPhone, body: `${BRAND}: Your ${a.serviceName} on ${a.date} at ${formatTimeLabel(a.startTime)} is CONFIRMED. See you then!` }) : Promise.resolve(true),
@@ -80,7 +88,7 @@ export async function notifyReminder(a: ApptNotice, kind: "24h" | "2h") {
     <p>${when(a)}</p>
     <p>Please arrive with clean, detangled, blow-dried hair.
     ${a.balanceCents ? `Balance due in person: <strong>${formatCents(a.balanceCents)}</strong>.` : ""}</p>
-    <p>Need to change it? <a href="${APP_URL}/account" style="color:#db2777">Manage your appointment →</a></p>`;
+    <p>Need to change it? <a href="${a.manageToken ? `${APP_URL}/manage/${a.manageToken}` : `${APP_URL}/account`}" style="color:#db2777">Manage your appointment →</a></p>`;
   await Promise.all([
     sendEmail({ to: a.clientEmail, subject: `Reminder: your appointment is ${lead}`, html: shell("Appointment reminder", body) }),
     a.clientPhone ? sendSMS({ to: a.clientPhone, body: `${BRAND} reminder: ${a.serviceName} ${lead} (${a.date} ${formatTimeLabel(a.startTime)}). Arrive with clean, blow-dried hair!` }) : Promise.resolve(true),

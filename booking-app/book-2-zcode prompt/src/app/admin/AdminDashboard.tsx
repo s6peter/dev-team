@@ -9,6 +9,10 @@ import { formatCents } from "@/lib/pricing";
 import { formatDateLabel, formatTimeLabel } from "@/lib/time";
 import { AdminServices } from "./AdminServices";
 import { AdminSchedule } from "./AdminSchedule";
+import { AdminCalendar } from "./AdminCalendar";
+import { AdminClients } from "./AdminClients";
+import { AdminAnalytics } from "./AdminAnalytics";
+import { AdminSettings } from "./AdminSettings";
 
 interface Appt {
   id: string;
@@ -47,7 +51,7 @@ const ACTIONS: Record<string, { action: string; label: string }[]> = {
 
 export function AdminDashboard({ stylistName }: { stylistName: string }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"appointments" | "schedule" | "services" | "reviews">("appointments");
+  const [tab, setTab] = useState<"calendar" | "appointments" | "clients" | "analytics" | "services" | "schedule" | "settings" | "reviews">("calendar");
   const [filter, setFilter] = useState<string>("pending");
   const [appts, setAppts] = useState<Appt[]>([]);
   const [allAppts, setAllAppts] = useState<Appt[]>([]);
@@ -115,9 +119,9 @@ export function AdminDashboard({ stylistName }: { stylistName: string }) {
         <Stat icon={<DollarSign className="h-4 w-4" />} label="Deposits collected" value={formatCents(stats.deposits)} />
       </div>
 
-      <div className="mb-4 flex gap-2 border-b border-border">
-        {(["appointments", "schedule", "services", "reviews"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`border-b-2 px-3 py-2 text-sm font-medium capitalize ${tab === t ? "border-brand-500 text-brand-600" : "border-transparent text-muted-foreground"}`}>{t}</button>
+      <div className="mb-4 flex gap-2 overflow-x-auto border-b border-border">
+        {(["calendar", "appointments", "clients", "analytics", "services", "schedule", "settings", "reviews"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium capitalize ${tab === t ? "border-brand-500 text-brand-600" : "border-transparent text-muted-foreground"}`}>{t}</button>
         ))}
       </div>
 
@@ -179,6 +183,10 @@ export function AdminDashboard({ stylistName }: { stylistName: string }) {
         </>
       )}
 
+      {tab === "calendar" && <AdminCalendar />}
+      {tab === "clients" && <AdminClients />}
+      {tab === "analytics" && <AdminAnalytics />}
+      {tab === "settings" && <AdminSettings />}
       {tab === "schedule" && <AdminSchedule />}
       {tab === "services" && <AdminServices />}
 

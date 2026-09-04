@@ -43,13 +43,16 @@ export type Database = {
           date: string
           deposit_cents: number
           end_time: string
+          fee_charged_cents: number
           id: string
           inspiration_photos: string[]
+          manage_token: string
           notes: string | null
           policy_consented_at: string | null
           rebook_prompt_sent_at: string | null
           reminder_24h_sent_at: string | null
           reminder_2h_sent_at: string | null
+          reschedule_count: number
           reschedule_of: string | null
           review_request_sent_at: string | null
           service_id: string
@@ -57,6 +60,7 @@ export type Database = {
           service_total_cents: number
           start_time: string
           status: string
+          stripe_payment_method_id: string | null
           stylist_id: string
           tax_cents: number
           time_range: unknown
@@ -70,13 +74,16 @@ export type Database = {
           date: string
           deposit_cents?: number
           end_time: string
+          fee_charged_cents?: number
           id?: string
           inspiration_photos?: string[]
+          manage_token?: string
           notes?: string | null
           policy_consented_at?: string | null
           rebook_prompt_sent_at?: string | null
           reminder_24h_sent_at?: string | null
           reminder_2h_sent_at?: string | null
+          reschedule_count?: number
           reschedule_of?: string | null
           review_request_sent_at?: string | null
           service_id: string
@@ -84,6 +91,7 @@ export type Database = {
           service_total_cents?: number
           start_time: string
           status?: string
+          stripe_payment_method_id?: string | null
           stylist_id: string
           tax_cents?: number
           time_range?: unknown
@@ -97,13 +105,16 @@ export type Database = {
           date?: string
           deposit_cents?: number
           end_time?: string
+          fee_charged_cents?: number
           id?: string
           inspiration_photos?: string[]
+          manage_token?: string
           notes?: string | null
           policy_consented_at?: string | null
           rebook_prompt_sent_at?: string | null
           reminder_24h_sent_at?: string | null
           reminder_2h_sent_at?: string | null
+          reschedule_count?: number
           reschedule_of?: string | null
           review_request_sent_at?: string | null
           service_id?: string
@@ -111,6 +122,7 @@ export type Database = {
           service_total_cents?: number
           start_time?: string
           status?: string
+          stripe_payment_method_id?: string | null
           stylist_id?: string
           tax_cents?: number
           time_range?: unknown
@@ -285,6 +297,7 @@ export type Database = {
           notes: string | null
           phone: string | null
           preferences: string | null
+          stripe_customer_id: string | null
           stylist_id: string
           tags: string[]
           user_id: string | null
@@ -299,6 +312,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           preferences?: string | null
+          stripe_customer_id?: string | null
           stylist_id: string
           tags?: string[]
           user_id?: string | null
@@ -313,6 +327,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           preferences?: string | null
+          stripe_customer_id?: string | null
           stylist_id?: string
           tags?: string[]
           user_id?: string | null

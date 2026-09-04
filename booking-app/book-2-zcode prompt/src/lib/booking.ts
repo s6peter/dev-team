@@ -77,6 +77,7 @@ export async function materializeBooking(
     return { status: "slot_taken" };
   }
 
+  await saveCardOnFile(appointmentId as string, paymentIntentId);
   await sendReceivedNotice(appointmentId as string);
   return { status: "booked", appointmentId: appointmentId as string };
 }
@@ -95,12 +96,29 @@ export async function materializeFreeBooking(holdId: string): Promise<Materializ
   return { status: "booked", appointmentId: appointmentId as string };
 }
 
+/** Persist the saved card (customer + payment method) so fees can be charged later. */
+async function saveCardOnFile(appointmentId: string, paymentIntentId: string) {
+  const supabase = createSupabaseAdminClient();
+  try {
+    const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const pmId = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
+    const custId = typeof pi.customer === "string" ? pi.customer : pi.customer?.id;
+    if (pmId) await supabase.from("appointments").update({ stripe_payment_method_id: pmId }).eq("id", appointmentId);
+    if (custId) {
+      const { data: appt } = await supabase.from("appointments").select("client_id").eq("id", appointmentId).maybeSingle();
+      if (appt?.client_id) await supabase.from("clients").update({ stripe_customer_id: custId }).eq("id", appt.client_id);
+    }
+  } catch (e) {
+    console.error("saveCardOnFile failed", e);
+  }
+}
+
 async function sendReceivedNotice(appointmentId: string) {
   const supabase = createSupabaseAdminClient();
   const { data: appt } = await supabase
     .from("appointments")
     .select(
-      "date,start_time,deposit_cents,balance_due_cents,service:services(name),client:clients(name,email,phone)"
+      "date,start_time,deposit_cents,balance_due_cents,manage_token,service:services(name),client:clients(name,email,phone)"
     )
     .eq("id", appointmentId)
     .maybeSingle();
@@ -116,5 +134,6 @@ async function sendReceivedNotice(appointmentId: string) {
     startTime: appt.start_time,
     depositCents: appt.deposit_cents,
     balanceCents: appt.balance_due_cents,
+    manageToken: appt.manage_token,
   }).catch((e) => console.error("notify failed", e));
 }
