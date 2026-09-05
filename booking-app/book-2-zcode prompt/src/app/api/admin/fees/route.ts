@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       confirm: true,
       description: `${kind.replace("_", " ")} fee — ${client.name}`,
       metadata: { appointment_id: appointmentId, kind: `fee_${kind}` },
-    }, { idempotencyKey: `fee_${appointmentId}_${kind}_${feeCents}` });
+    }, { idempotencyKey: `fee_${appointmentId}` });
     await supabase.from("payments").insert({
       appointment_id: appointmentId, type: "fee", amount: feeCents, stripe_payment_id: pi.id, status: pi.status === "succeeded" ? "completed" : "pending",
     });

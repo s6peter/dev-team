@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { logNotification } from "@/lib/notification-log";
 
 const apiKey = process.env.RESEND_API_KEY;
 const from = process.env.EMAIL_FROM || "QueenG Braids <onboarding@resend.dev>";
@@ -21,6 +22,7 @@ export async function sendEmail({
 }): Promise<boolean> {
   if (!resend) {
     console.log(`\n📧 [dev email] → ${to}\n   subject: ${subject}\n   ${text ?? stripHtml(html)}\n`);
+    await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "logged" });
     return true;
   }
   try {
@@ -33,8 +35,10 @@ export async function sendEmail({
     });
     if (error) {
       console.error("Email send error:", error);
+      await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "failed" });
       return false;
     }
+    await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "sent" });
     return true;
   } catch (error) {
     console.error("Email send error:", error);

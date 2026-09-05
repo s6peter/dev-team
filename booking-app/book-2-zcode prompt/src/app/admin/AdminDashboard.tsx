@@ -13,6 +13,10 @@ import { AdminCalendar } from "./AdminCalendar";
 import { AdminClients } from "./AdminClients";
 import { AdminAnalytics } from "./AdminAnalytics";
 import { AdminSettings } from "./AdminSettings";
+import { AdminPortfolio } from "./AdminPortfolio";
+import { AdminWaitlist } from "./AdminWaitlist";
+import { AdminMessages } from "./AdminMessages";
+import { AdminStaff } from "./AdminStaff";
 
 interface Appt {
   id: string;
@@ -49,9 +53,11 @@ const ACTIONS: Record<string, { action: string; label: string }[]> = {
   declined: [{ action: "revert", label: "Revert" }],
 };
 
-export function AdminDashboard({ stylistName }: { stylistName: string }) {
+type AdminTab = "calendar" | "appointments" | "clients" | "waitlist" | "analytics" | "services" | "portfolio" | "schedule" | "messages" | "staff" | "settings" | "reviews";
+
+export function AdminDashboard({ stylistName, isOwner }: { stylistName: string; isOwner: boolean }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"calendar" | "appointments" | "clients" | "analytics" | "services" | "schedule" | "settings" | "reviews">("calendar");
+  const [tab, setTab] = useState<AdminTab>("calendar");
   const [filter, setFilter] = useState<string>("pending");
   const [appts, setAppts] = useState<Appt[]>([]);
   const [allAppts, setAllAppts] = useState<Appt[]>([]);
@@ -120,7 +126,7 @@ export function AdminDashboard({ stylistName }: { stylistName: string }) {
       </div>
 
       <div className="mb-4 flex gap-2 overflow-x-auto border-b border-border">
-        {(["calendar", "appointments", "clients", "analytics", "services", "schedule", "settings", "reviews"] as const).map((t) => (
+        {(["calendar", "appointments", "clients", "waitlist", "analytics", "services", "portfolio", "schedule", "messages", ...(isOwner ? (["staff"] as const) : []), "settings", "reviews"] as AdminTab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium capitalize ${tab === t ? "border-brand-500 text-brand-600" : "border-transparent text-muted-foreground"}`}>{t}</button>
         ))}
       </div>
@@ -185,6 +191,10 @@ export function AdminDashboard({ stylistName }: { stylistName: string }) {
 
       {tab === "calendar" && <AdminCalendar />}
       {tab === "clients" && <AdminClients />}
+      {tab === "waitlist" && <AdminWaitlist />}
+      {tab === "portfolio" && <AdminPortfolio />}
+      {tab === "messages" && <AdminMessages />}
+      {tab === "staff" && <AdminStaff />}
       {tab === "analytics" && <AdminAnalytics />}
       {tab === "settings" && <AdminSettings />}
       {tab === "schedule" && <AdminSchedule />}

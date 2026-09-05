@@ -50,6 +50,7 @@ export type Database = {
           notes: string | null
           policy_consented_at: string | null
           rebook_prompt_sent_at: string | null
+          recurring_group_id: string | null
           reminder_24h_sent_at: string | null
           reminder_2h_sent_at: string | null
           reschedule_count: number
@@ -81,6 +82,7 @@ export type Database = {
           notes?: string | null
           policy_consented_at?: string | null
           rebook_prompt_sent_at?: string | null
+          recurring_group_id?: string | null
           reminder_24h_sent_at?: string | null
           reminder_2h_sent_at?: string | null
           reschedule_count?: number
@@ -112,6 +114,7 @@ export type Database = {
           notes?: string | null
           policy_consented_at?: string | null
           rebook_prompt_sent_at?: string | null
+          recurring_group_id?: string | null
           reminder_24h_sent_at?: string | null
           reminder_2h_sent_at?: string | null
           reschedule_count?: number
@@ -405,6 +408,47 @@ export type Database = {
             columns: ["appointment_id"]
             isOneToOne: false
             referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_log: {
+        Row: {
+          body: string | null
+          channel: string
+          created_at: string | null
+          id: string
+          recipient: string
+          status: string
+          stylist_id: string | null
+          subject: string | null
+        }
+        Insert: {
+          body?: string | null
+          channel: string
+          created_at?: string | null
+          id?: string
+          recipient: string
+          status?: string
+          stylist_id?: string | null
+          subject?: string | null
+        }
+        Update: {
+          body?: string | null
+          channel?: string
+          created_at?: string | null
+          id?: string
+          recipient?: string
+          status?: string
+          stylist_id?: string | null
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_log_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
             referencedColumns: ["id"]
           },
         ]
@@ -821,10 +865,12 @@ export type Database = {
         Row: {
           avatar_url: string | null
           bio: string | null
+          calendar_feed_token: string
           created_at: string | null
           email: string
           id: string
           instagram: string | null
+          is_owner: boolean
           name: string
           phone: string | null
           user_id: string | null
@@ -832,10 +878,12 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           bio?: string | null
+          calendar_feed_token?: string
           created_at?: string | null
           email: string
           id?: string
           instagram?: string | null
+          is_owner?: boolean
           name: string
           phone?: string | null
           user_id?: string | null
@@ -843,10 +891,12 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           bio?: string | null
+          calendar_feed_token?: string
           created_at?: string | null
           email?: string
           id?: string
           instagram?: string | null
+          is_owner?: boolean
           name?: string
           phone?: string | null
           user_id?: string | null

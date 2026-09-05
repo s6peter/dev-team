@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getAdminStylist } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3456";
+
 /** GET business profile + cancellation policy. */
 export async function GET() {
   const stylist = await getAdminStylist();
@@ -12,6 +14,7 @@ export async function GET() {
   return NextResponse.json({
     profile: { name: stylist.name, email: stylist.email, phone: stylist.phone, bio: stylist.bio, instagram: stylist.instagram },
     policy,
+    calendarFeedUrl: `${APP_URL}/api/calendar/${stylist.calendar_feed_token}.ics`,
   });
 }
 

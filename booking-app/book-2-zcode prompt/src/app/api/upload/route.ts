@@ -6,6 +6,8 @@ const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
 /** POST /api/upload (multipart 'file') — inspiration photo -> public Storage URL. */
 export async function POST(request: Request) {
+  const len = Number(request.headers.get("content-length") || 0);
+  if (len > MAX_BYTES + 1024) return NextResponse.json({ error: "Image exceeds size limit" }, { status: 413 });
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) {

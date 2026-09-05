@@ -14,7 +14,7 @@ export default async function AdminPage() {
     <div className="flex min-h-screen flex-col">
       <Header />
       <main className="flex-1">
-        {stylist ? <AdminDashboard stylistName={stylist.name} /> : <AdminLogin />}
+        {stylist ? <AdminDashboard stylistName={stylist.name} isOwner={stylist.is_owner} /> : <AdminLogin />}
       </main>
       <Footer />
     </div>

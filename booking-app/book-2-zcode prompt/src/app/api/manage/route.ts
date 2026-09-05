@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rescheduleAppointment } from "@/lib/reschedule";
 import { stripe } from "@/lib/stripe";
+import { notifyWaitlistOnOpening } from "@/lib/waitlist";
 import { hoursUntilSalon } from "@/lib/time";
 
 const schema = z.object({
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   const supabase = createSupabaseAdminClient();
   const { data: appt } = await supabase
     .from("appointments")
-    .select("id,date,start_time,status,stylist_id")
+    .select("id,date,start_time,status,stylist_id,service_id")
     .eq("manage_token", token)
     .maybeSingle();
   if (!appt) return NextResponse.json({ error: "Link not found" }, { status: 404 });
@@ -52,5 +53,6 @@ export async function POST(request: Request) {
     }
   }
   await supabase.from("appointments").update({ status: "cancelled", cancelled_reason: "Cancelled by client" }).eq("id", appt.id);
+  await notifyWaitlistOnOpening(appt.stylist_id, appt.date, appt.service_id).catch(() => {});
   return NextResponse.json({ ok: true, refunded });
 }

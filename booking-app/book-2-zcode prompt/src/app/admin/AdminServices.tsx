@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { FolderPlus, Layers, Loader2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FolderPlus, Layers, Loader2, Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/pricing";
 import { formatDuration } from "@/lib/utils";
@@ -599,6 +599,27 @@ function ServiceForm({
   onAddTier,
   onRemoveTier,
 }: ServiceFormProps) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+
+  async function handleUpload(file: File | undefined) {
+    if (!file) return;
+    setUploading(true);
+    setUploadErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) setUploadErr(data.error ?? "Upload failed");
+      else onChange({ imageUrl: data.url });
+    } catch {
+      setUploadErr("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
       <div className="my-8 w-full max-w-2xl rounded-xl border border-border bg-background p-6 shadow-lg">
@@ -736,14 +757,32 @@ function ServiceForm({
             />
           </Field>
 
-          <Field label="Image URL">
-            <input
-              type="url"
-              className={inputClass}
-              value={draft.imageUrl}
-              onChange={(e) => onChange({ imageUrl: e.target.value })}
-              placeholder="https://…"
-            />
+          <Field label="Photo">
+            <div className="flex items-start gap-3">
+              {draft.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={draft.imageUrl} alt="preview" className="h-20 w-20 flex-shrink-0 rounded-lg border border-border object-cover" />
+              ) : (
+                <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground">
+                  <Upload className="h-5 w-5" />
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-accent">
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading ? "Uploading…" : "Upload a photo"}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => handleUpload(e.target.files?.[0])} />
+                </label>
+                <input
+                  type="url"
+                  className={inputClass}
+                  value={draft.imageUrl}
+                  onChange={(e) => onChange({ imageUrl: e.target.value })}
+                  placeholder="…or paste an image URL"
+                />
+                {uploadErr && <p className="text-xs text-red-600">{uploadErr}</p>}
+              </div>
+            </div>
           </Field>
 
           <label className="flex items-center gap-2 text-sm font-medium">

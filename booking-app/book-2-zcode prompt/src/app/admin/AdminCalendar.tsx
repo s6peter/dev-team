@@ -120,6 +120,12 @@ interface AppointmentsResponse {
 
 type ApptAction = "confirm" | "decline" | "complete" | "no_show" | "cancel" | "revert";
 
+/** Optional weekly repeat for a stylist-created appointment. */
+interface RecurrenceInput {
+  everyWeeks: number; // 1–8
+  count: number; // 2–12 (total sessions, including the first)
+}
+
 interface NewApptPayload {
   clientName: string;
   clientEmail: string;
@@ -130,6 +136,28 @@ interface NewApptPayload {
   startTime: string;
   status: "confirmed" | "pending";
   depositPaidCents: number;
+  recurrence?: RecurrenceInput; // omitted when the appointment does not repeat
+}
+
+/** POST /api/admin/appointments result. `created` is a count; `skipped` are 'YYYY-MM-DD's. */
+interface CreateApptResult {
+  ok: boolean;
+  appointmentId: string;
+  created: number;
+  skipped: string[];
+}
+
+/** Balance-charge shapes (money is integer CENTS). */
+interface BalanceQuote {
+  balanceCents: number;
+  hasCard: boolean;
+  alreadyPaid: boolean;
+}
+
+interface BalanceChargeResult {
+  ok: boolean;
+  chargedCents: number;
+  status: string;
 }
 
 /** Fee-charge (no-show / late-cancel) shapes. Money is integer CENTS. */
@@ -154,7 +182,7 @@ interface DragState {
   grabOffsetY: number;
 }
 
-type ViewMode = "day" | "week";
+type ViewMode = "day" | "week" | "month";
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
@@ -180,6 +208,9 @@ for (let m = DAY_START_MIN + 30; m < DAY_END_MIN; m += 60) HALF_MARKS.push(m);
 
 // Statuses that can be charged a no-show / late-cancel fee.
 const FEE_STATUSES = new Set(["confirmed", "no_show", "cancelled"]);
+
+// Max appointment chips a month cell shows before collapsing into "+N more".
+const MONTH_CHIP_LIMIT = 3;
 
 const INPUT_CLASS =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
@@ -278,6 +309,27 @@ function shortMonthDay(dateStr: string): string {
     day: "numeric",
     timeZone: "UTC",
   });
+}
+
+/** "September 2026" for a 'YYYY-MM-DD' string (TZ-safe). */
+function monthLabel(dateStr: string): string {
+  const [y, m] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Add calendar months to a 'YYYY-MM-DD' string, clamping the day to the target month. */
+function addMonths(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const monthIndex = m - 1 + delta;
+  const targetYear = y + Math.floor(monthIndex / 12);
+  const targetMonth = ((monthIndex % 12) + 12) % 12; // 0–11
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  const day = Math.min(d, lastDay);
+  return `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function centsFromDollars(input: string): number {
@@ -391,6 +443,7 @@ export function AdminCalendar() {
   const [newAppt, setNewAppt] = useState<{ date: string; time: string } | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createInfo, setCreateInfo] = useState<string | null>(null);
 
   // Drag-to-reschedule.
   const dragInfoRef = useRef<DragState | null>(null);
@@ -442,6 +495,14 @@ export function AdminCalendar() {
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekEnd = weekDays[6] ?? weekStart;
 
+  // Month grid: 6 rows × 7 cols (Sun–Sat), Sunday-aligned to the focused month.
+  const monthStr = selectedDate.slice(0, 7); // "YYYY-MM"
+  const monthGridDays = useMemo(() => {
+    const firstOfMonth = `${monthStr}-01`;
+    const gridStart = addDays(firstOfMonth, -dayOfWeek(firstOfMonth));
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [monthStr]);
+
   const countByDate = useMemo(() => {
     const map: Record<string, number> = {};
     for (const a of appointments) {
@@ -470,6 +531,7 @@ export function AdminCalendar() {
     setSelectedApptId(null);
     setPanelError(null);
     setNewAppt(null);
+    setCreateInfo(null);
   }
 
   function goToday(): void {
@@ -477,7 +539,17 @@ export function AdminCalendar() {
   }
 
   function stepBy(direction: 1 | -1): void {
+    if (viewMode === "month") {
+      selectDate(addMonths(selectedDate, direction));
+      return;
+    }
     selectDate(addDays(selectedDate, direction * (viewMode === "week" ? 7 : 1)));
+  }
+
+  /** Month cell click → drop into day view for that date. */
+  function openDayFromMonth(date: string): void {
+    selectDate(date);
+    setViewMode("day");
   }
 
   function defaultNewTime(): string {
@@ -489,6 +561,7 @@ export function AdminCalendar() {
 
   function openNewAppt(time: string): void {
     setFormError(null);
+    setCreateInfo(null);
     setNewAppt({ date: selectedDate, time });
   }
 
@@ -499,6 +572,7 @@ export function AdminCalendar() {
     const abs = DAY_START_MIN + y / PX_PER_MIN;
     const snapped = clamp(Math.round(abs / SNAP_MIN) * SNAP_MIN, DAY_START_MIN, DAY_END_MIN - SNAP_MIN);
     setFormError(null);
+    setCreateInfo(null);
     setNewAppt({ date, time: minutesToTime(snapped) });
   }
 
@@ -621,9 +695,15 @@ export function AdminCalendar() {
     setCreating(true);
     setFormError(null);
     try {
-      await apiFetch("/api/admin/appointments", jsonInit("POST", payload));
+      const res = await apiFetch<CreateApptResult>("/api/admin/appointments", jsonInit("POST", payload));
       if (payload.date !== selectedDate) setSelectedDate(payload.date);
       setNewAppt(null);
+      let msg = `Created ${res.created} appointment${res.created === 1 ? "" : "s"}`;
+      if (res.skipped.length > 0) {
+        const n = res.skipped.length;
+        msg += `. ${n} date${n === 1 ? "" : "s"} skipped due to conflicts: ${res.skipped.map(shortMonthDay).join(", ")}`;
+      }
+      setCreateInfo(`${msg}.`);
       await load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Could not create appointment.");
@@ -657,11 +737,15 @@ export function AdminCalendar() {
             <h2 className="text-lg font-semibold">Calendar</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            {viewMode === "week" ? `${shortMonthDay(weekStart)} – ${shortMonthDay(weekEnd)}` : formatDateLabel(selectedDate)}
+            {viewMode === "week"
+              ? `${shortMonthDay(weekStart)} – ${shortMonthDay(weekEnd)}`
+              : viewMode === "month"
+              ? monthLabel(selectedDate)
+              : formatDateLabel(selectedDate)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* Day / Week toggle */}
+          {/* Day / Week / Month toggle */}
           <div className="flex items-center rounded-md border border-border">
             <button
               type="button"
@@ -675,18 +759,27 @@ export function AdminCalendar() {
             <button
               type="button"
               onClick={() => setViewMode("week")}
-              className={`h-9 rounded-r-md border-l border-border px-3 text-sm font-medium transition-colors ${
+              className={`h-9 border-l border-border px-3 text-sm font-medium transition-colors ${
                 viewMode === "week" ? "bg-brand-500 text-white" : "hover:bg-muted"
               }`}
             >
               Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("month")}
+              className={`h-9 rounded-r-md border-l border-border px-3 text-sm font-medium transition-colors ${
+                viewMode === "month" ? "bg-brand-500 text-white" : "hover:bg-muted"
+              }`}
+            >
+              Month
             </button>
           </div>
 
           <div className="flex items-center rounded-md border border-border">
             <button
               type="button"
-              aria-label={viewMode === "week" ? "Previous week" : "Previous day"}
+              aria-label={`Previous ${viewMode}`}
               onClick={() => stepBy(-1)}
               className="flex h-9 w-9 items-center justify-center rounded-l-md hover:bg-muted"
             >
@@ -701,7 +794,7 @@ export function AdminCalendar() {
             </button>
             <button
               type="button"
-              aria-label={viewMode === "week" ? "Next week" : "Next day"}
+              aria-label={`Next ${viewMode}`}
               onClick={() => stepBy(1)}
               className="flex h-9 w-9 items-center justify-center rounded-r-md hover:bg-muted"
             >
@@ -722,39 +815,41 @@ export function AdminCalendar() {
         </div>
       </div>
 
-      {/* Week strip --------------------------------------------------------- */}
-      <div className="overflow-x-auto">
-        <div className="flex w-full gap-2">
-          {weekDays.map((d) => {
-            const isSel = d === selectedDate;
-            const isToday = d === todayStr;
-            const wd = dayOfWeek(d);
-            const count = countByDate[d] ?? 0;
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => selectDate(d)}
-                className={`flex min-w-[3.25rem] flex-1 flex-col items-center rounded-lg border px-2 py-1.5 transition-colors ${
-                  isSel ? "border-brand-500 bg-brand-500 text-white" : "border-border hover:bg-muted"
-                }`}
-              >
-                <span className={`text-[11px] uppercase ${isSel ? "text-white/80" : "text-muted-foreground"}`}>
-                  {DAY_SHORT[wd]}
-                </span>
-                <span className={`mt-0.5 text-base font-semibold ${isToday && !isSel ? "text-brand-600" : ""}`}>
-                  {Number(d.slice(8, 10))}
-                </span>
-                <span
-                  className={`mt-1 h-1.5 w-1.5 rounded-full ${
-                    count > 0 ? (isSel ? "bg-white" : "bg-brand-500") : "bg-transparent"
+      {/* Week strip (day + week views) ------------------------------------- */}
+      {viewMode !== "month" && (
+        <div className="overflow-x-auto">
+          <div className="flex w-full gap-2">
+            {weekDays.map((d) => {
+              const isSel = d === selectedDate;
+              const isToday = d === todayStr;
+              const wd = dayOfWeek(d);
+              const count = countByDate[d] ?? 0;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => selectDate(d)}
+                  className={`flex min-w-[3.25rem] flex-1 flex-col items-center rounded-lg border px-2 py-1.5 transition-colors ${
+                    isSel ? "border-brand-500 bg-brand-500 text-white" : "border-border hover:bg-muted"
                   }`}
-                />
-              </button>
-            );
-          })}
+                >
+                  <span className={`text-[11px] uppercase ${isSel ? "text-white/80" : "text-muted-foreground"}`}>
+                    {DAY_SHORT[wd]}
+                  </span>
+                  <span className={`mt-0.5 text-base font-semibold ${isToday && !isSel ? "text-brand-600" : ""}`}>
+                    {Number(d.slice(8, 10))}
+                  </span>
+                  <span
+                    className={`mt-1 h-1.5 w-1.5 rounded-full ${
+                      count > 0 ? (isSel ? "bg-white" : "bg-brand-500") : "bg-transparent"
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {loadError && (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -762,6 +857,19 @@ export function AdminCalendar() {
           <Button size="sm" variant="outline" onClick={load}>
             Retry
           </Button>
+        </div>
+      )}
+
+      {createInfo && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <span>{createInfo}</span>
+          <button
+            type="button"
+            onClick={() => setCreateInfo(null)}
+            className="shrink-0 rounded-md px-2 py-0.5 text-xs font-medium hover:bg-green-100"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -787,8 +895,8 @@ export function AdminCalendar() {
         </div>
       )}
 
-      {/* Time grid (day = 1 column, week = 7) ------------------------------- */}
-      <div className="rounded-xl border border-border">
+      {/* Time grid (day = 1 column, week = 7) / month grid ------------------ */}
+      <div className={`rounded-xl border border-border ${viewMode === "month" ? "overflow-hidden" : ""}`}>
         {loading ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -807,7 +915,7 @@ export function AdminCalendar() {
               />
             </div>
           </div>
-        ) : (
+        ) : viewMode === "week" ? (
           <div className="overflow-x-auto">
             <div className="min-w-[760px]">
               {/* Column headers */}
@@ -852,6 +960,15 @@ export function AdminCalendar() {
               </div>
             </div>
           </div>
+        ) : (
+          <MonthView
+            gridDays={monthGridDays}
+            monthStr={monthStr}
+            apptsByDate={apptsByDate}
+            todayStr={todayStr}
+            onSelectDay={openDayFromMonth}
+            onSelectAppt={handleBlockClick}
+          />
         )}
       </div>
 
@@ -1109,6 +1226,112 @@ function DayColumn({
 }
 
 /* ------------------------------------------------------------------ */
+/* Month view — 6×7 day grid with appointment chips                   */
+/* ------------------------------------------------------------------ */
+
+interface MonthViewProps {
+  gridDays: string[]; // 42 'YYYY-MM-DD' strings, Sunday-aligned
+  monthStr: string; // 'YYYY-MM' of the focused month
+  apptsByDate: Record<string, Appointment[]>;
+  todayStr: string;
+  onSelectDay: (date: string) => void;
+  onSelectAppt: (apptId: string) => void;
+}
+
+function MonthView({ gridDays, monthStr, apptsByDate, todayStr, onSelectDay, onSelectAppt }: MonthViewProps) {
+  return (
+    <div>
+      {/* Weekday header */}
+      <div className="grid grid-cols-7 border-b border-border">
+        {DAY_SHORT.map((name) => (
+          <div key={name} className="px-2 py-1.5 text-center text-[11px] font-medium uppercase text-muted-foreground">
+            {name}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7">
+        {gridDays.map((d) => {
+          const inMonth = d.slice(0, 7) === monthStr;
+          const isToday = d === todayStr;
+          const dayNum = Number(d.slice(8, 10));
+          const dayAppts = [...(apptsByDate[d] ?? [])].sort(
+            (a, b) => timeToMinutes(a.start_time) - timeToMinutes(b.start_time)
+          );
+          const shown = dayAppts.slice(0, MONTH_CHIP_LIMIT);
+          const extra = dayAppts.length - shown.length;
+          return (
+            <div
+              key={d}
+              onClick={() => onSelectDay(d)}
+              className={`flex min-h-[96px] cursor-pointer flex-col gap-1 border-b border-r border-border p-1 text-left transition-colors [&:nth-child(7n)]:border-r-0 [&:nth-child(n+36)]:border-b-0 ${
+                inMonth ? "hover:bg-muted/50" : "bg-muted/20 hover:bg-muted/30"
+              }`}
+            >
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  aria-label={`Open ${formatDateLabel(d)}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectDay(d);
+                  }}
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                    isToday
+                      ? "bg-brand-500 text-white"
+                      : inMonth
+                      ? "text-foreground hover:bg-muted"
+                      : "text-muted-foreground/60"
+                  }`}
+                >
+                  {dayNum}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-0.5 overflow-hidden">
+                {shown.map((a) => {
+                  const meta = statusMeta(a.status);
+                  const clientName = a.client?.name ?? "Client";
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectAppt(a.id);
+                      }}
+                      title={`${formatTimeLabel(a.start_time)} · ${clientName}`}
+                      className={`block w-full truncate rounded border-l-2 px-1 py-0.5 text-left text-[10px] leading-tight ${
+                        meta.block
+                      } ${inMonth ? "" : "opacity-60"}`}
+                    >
+                      <span className="font-medium">{formatTimeLabel(a.start_time)}</span> {clientName}
+                    </button>
+                  );
+                })}
+                {extra > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectDay(d);
+                    }}
+                    className="px-1 text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    +{extra} more
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Appointment detail (right panel on desktop, bottom sheet on mobile) */
 /* ------------------------------------------------------------------ */
 
@@ -1135,18 +1358,21 @@ function AppointmentDetail({
   const [date, setDate] = useState(appt.date);
   const [time, setTime] = useState(toHhMm(appt.start_time));
   const [openFee, setOpenFee] = useState<FeeKind | null>(null);
+  const [balanceOpen, setBalanceOpen] = useState(false);
 
   useEffect(() => {
     setDate(appt.date);
     setTime(toHhMm(appt.start_time));
     setReschedOpen(false);
     setOpenFee(null);
+    setBalanceOpen(false);
   }, [appt.id, appt.date, appt.start_time]);
 
   const meta = statusMeta(appt.status);
   const actions = STATUS_ACTIONS[appt.status] ?? [];
   const busy = busyAction !== null || rescheduling;
   const canCharge = FEE_STATUSES.has(appt.status);
+  const canChargeBalance = appt.status === "confirmed" || appt.status === "completed";
 
   return (
     <div
@@ -1245,6 +1471,18 @@ function AppointmentDetail({
           </div>
         )}
 
+        {/* Charge the remaining balance (+ optional tip) */}
+        {canChargeBalance && (
+          <div className="mt-4 border-t border-border pt-4">
+            <BalanceCharge
+              key={appt.id}
+              appointmentId={appt.id}
+              open={balanceOpen}
+              onToggle={() => setBalanceOpen((v) => !v)}
+            />
+          </div>
+        )}
+
         {/* Charge a fee */}
         {canCharge && (
           <div className="mt-4 space-y-2 border-t border-border pt-4">
@@ -1306,6 +1544,137 @@ function AppointmentDetail({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Balance charge (remaining balance + optional tip) — integer CENTS   */
+/* ------------------------------------------------------------------ */
+
+interface BalanceChargeProps {
+  appointmentId: string;
+  open: boolean;
+  onToggle: () => void;
+}
+
+function BalanceCharge({ appointmentId, open, onToggle }: BalanceChargeProps) {
+  const [quote, setQuote] = useState<BalanceQuote | null>(null);
+  const [loadingQuote, setLoadingQuote] = useState(false);
+  const [tip, setTip] = useState("0");
+  const [charging, setCharging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Fetch the balance quote whenever this section opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoadingQuote(true);
+    setError(null);
+    setSuccess(null);
+    setQuote(null);
+    setTip("0");
+    apiFetch<BalanceQuote>(`/api/admin/charge-balance?appointmentId=${encodeURIComponent(appointmentId)}`)
+      .then((q) => {
+        if (!cancelled) setQuote(q);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load balance.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingQuote(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, appointmentId]);
+
+  const tipCents = centsFromDollars(tip);
+
+  async function submit(): Promise<void> {
+    if (charging) return;
+    setCharging(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await apiFetch<BalanceChargeResult>(
+        "/api/admin/charge-balance",
+        jsonInit("POST", { appointmentId, tipCents })
+      );
+      setSuccess(`Charged ${formatCents(res.chargedCents)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Charge failed.");
+    } finally {
+      setCharging(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border p-2">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="w-full justify-start"
+        disabled={charging}
+        onClick={onToggle}
+      >
+        <CreditCard className="mr-1 h-4 w-4" />
+        Balance &amp; tip
+      </Button>
+
+      {open && (
+        <div className="mt-2 space-y-2">
+          {loadingQuote ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking balance…
+            </div>
+          ) : quote && quote.alreadyPaid ? (
+            <p className="text-sm font-medium text-green-700">Balance paid ✓</p>
+          ) : quote && !quote.hasCard ? (
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant="outline" disabled>
+                Charge balance + tip
+              </Button>
+              <span className="text-xs text-muted-foreground">No card on file</span>
+            </div>
+          ) : quote ? (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Balance</span>
+                <span className="font-semibold">{formatCents(quote.balanceCents)}</span>
+              </div>
+              <label className="block text-xs text-muted-foreground">Tip ($)</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className={INPUT_CLASS}
+                value={tip}
+                onChange={(e) => setTip(e.target.value)}
+                disabled={charging}
+              />
+              <p className="text-xs text-muted-foreground">
+                Total to charge: {formatCents(quote.balanceCents + tipCents)}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="w-full bg-brand-500 hover:bg-brand-600"
+                disabled={charging}
+                onClick={submit}
+              >
+                {charging ? <Loader2 className="h-4 w-4 animate-spin" /> : "Charge balance + tip"}
+              </Button>
+            </>
+          ) : null}
+
+          {success && <p className="text-sm font-medium text-green-700">{success}</p>}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1473,6 +1842,9 @@ function NewAppointmentModal({
   const [depositDollars, setDepositDollars] = useState("0");
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
+  const [repeat, setRepeat] = useState(false);
+  const [everyWeeks, setEveryWeeks] = useState("4");
+  const [sessionCount, setSessionCount] = useState("4");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const selectedService = useMemo(() => services.find((s) => s.id === serviceId) ?? null, [services, serviceId]);
@@ -1493,7 +1865,7 @@ function NewAppointmentModal({
       return;
     }
     setLocalError(null);
-    onSubmit({
+    const payload: NewApptPayload = {
       clientName: clientName.trim(),
       clientEmail: clientEmail.trim(),
       clientPhone: clientPhone.trim(),
@@ -1503,7 +1875,14 @@ function NewAppointmentModal({
       startTime: time,
       status,
       depositPaidCents: centsFromDollars(depositDollars),
-    });
+    };
+    if (repeat) {
+      payload.recurrence = {
+        everyWeeks: clamp(Math.floor(Number(everyWeeks)) || 4, 1, 8),
+        count: clamp(Math.floor(Number(sessionCount)) || 4, 2, 12),
+      };
+    }
+    onSubmit(payload);
   }
 
   return (
@@ -1588,6 +1967,45 @@ function NewAppointmentModal({
               onChange={(e) => setDepositDollars(e.target.value)}
             />
           </Field>
+
+          {/* Recurring appointment */}
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={repeat}
+                onChange={(e) => setRepeat(e.target.checked)}
+                className="h-4 w-4 rounded border-input text-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+              Repeat this appointment
+            </label>
+            {repeat && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Repeat every (weeks)">
+                  <input
+                    type="number"
+                    min={1}
+                    max={8}
+                    step={1}
+                    className={INPUT_CLASS}
+                    value={everyWeeks}
+                    onChange={(e) => setEveryWeeks(e.target.value)}
+                  />
+                </Field>
+                <Field label="Number of sessions">
+                  <input
+                    type="number"
+                    min={2}
+                    max={12}
+                    step={1}
+                    className={INPUT_CLASS}
+                    value={sessionCount}
+                    onChange={(e) => setSessionCount(e.target.value)}
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
 
           {services.length === 0 && (
             <p className="text-sm text-amber-700 sm:col-span-2">

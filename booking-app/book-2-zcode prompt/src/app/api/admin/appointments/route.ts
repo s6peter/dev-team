@@ -5,7 +5,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { notifyConfirmed, notifyDeclined, type ApptNotice } from "@/lib/notifications";
 import { computePricing } from "@/lib/pricing";
-import { minutesToTime, timeToMinutes } from "@/lib/time";
+import { minutesToTime, timeToMinutes, addDays } from "@/lib/time";
+import { notifyWaitlistOnOpening } from "@/lib/waitlist";
 import { rescheduleAppointment } from "@/lib/reschedule";
 import type { Database } from "@/types/database.types";
 
@@ -82,6 +83,10 @@ export async function PATCH(request: Request) {
     .eq("stylist_id", stylist.id);
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
+  if (action === "decline" || action === "cancel") {
+    await notifyWaitlistOnOpening(stylist.id, appt.date, appt.service_id).catch(() => {});
+  }
+
   // Notify client (best effort).
   const client = appt.client as unknown as { name: string; email: string; phone: string | null } | null;
   const service = appt.service as unknown as { name: string } | null;
@@ -112,6 +117,7 @@ const createSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   status: z.enum(["pending", "confirmed"]).default("confirmed"),
   depositPaidCents: z.number().int().min(0).optional().default(0),
+  recurrence: z.object({ everyWeeks: z.number().int().min(1).max(8), count: z.number().int().min(2).max(12) }).optional(),
 });
 
 /** POST — stylist creates an appointment directly on the calendar (walk-in / phone). */
@@ -164,39 +170,50 @@ export async function POST(request: Request) {
     .single();
   if (cErr || !client) return NextResponse.json({ error: "Could not save client" }, { status: 500 });
 
-  const { data: appt, error } = await supabase
-    .from("appointments")
-    .insert({
-      client_id: client.id,
-      stylist_id: stylist.id,
-      service_id: b.serviceId,
-      service_tier_id: b.tierId ?? null,
-      date: b.date,
-      start_time: b.startTime,
-      end_time: endTime,
-      status: b.status,
-      service_total_cents: pricing.serviceTotalCents,
-      tax_cents: pricing.taxCents,
-      deposit_cents: pricing.depositCents,
-      balance_due_cents: pricing.balanceDueCents,
-      notes: "Created by stylist",
-    })
-    .select("id")
-    .single();
-  if (error) {
-    if (error.code === "23P01") return NextResponse.json({ error: "That time overlaps an existing appointment." }, { status: 409 });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const dates = b.recurrence
+    ? Array.from({ length: b.recurrence.count }, (_, i) => addDays(b.date, i * b.recurrence!.everyWeeks * 7))
+    : [b.date];
+  const groupId = b.recurrence ? crypto.randomUUID() : null;
+  const created: string[] = [];
+  const skipped: string[] = [];
+
+  for (const d of dates) {
+    const { data: appt, error } = await supabase
+      .from("appointments")
+      .insert({
+        client_id: client.id,
+        stylist_id: stylist.id,
+        service_id: b.serviceId,
+        service_tier_id: b.tierId ?? null,
+        date: d,
+        start_time: b.startTime,
+        end_time: endTime,
+        status: b.status,
+        service_total_cents: pricing.serviceTotalCents,
+        tax_cents: created.length === 0 ? pricing.taxCents : 0,
+        // Only the first session collects a deposit; later sessions owe the full total in person.
+        deposit_cents: created.length === 0 ? pricing.depositCents : 0,
+        balance_due_cents: created.length === 0 ? pricing.balanceDueCents : pricing.serviceTotalCents,
+        notes: "Created by stylist",
+        recurring_group_id: groupId,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      if (error.code === "23P01") { skipped.push(d); continue; }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    // Deposit collected once (on the first instance).
+    if (b.depositPaidCents > 0 && created.length === 0) {
+      await supabase.from("payments").insert({ appointment_id: appt.id, type: "deposit", amount: b.depositPaidCents, status: "completed" });
+    }
+    created.push(appt.id);
   }
 
-  if (b.depositPaidCents > 0) {
-    await supabase.from("payments").insert({
-      appointment_id: appt.id,
-      type: "deposit",
-      amount: b.depositPaidCents,
-      status: "completed",
-    });
+  if (created.length === 0) {
+    return NextResponse.json({ error: "That time overlaps an existing appointment." }, { status: 409 });
   }
-  return NextResponse.json({ ok: true, appointmentId: appt.id });
+  return NextResponse.json({ ok: true, appointmentId: created[0], created: created.length, skipped });
 }
 
 async function refundDeposit(appointmentId: string): Promise<boolean> {

@@ -27,6 +27,8 @@ export default function BookPage() {
   const [openDays, setOpenDays] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>(0);
+  const [stylists, setStylists] = useState<{ id: string; name: string; bio: string | null; avatar_url: string | null }[]>([]);
+  const [stylistId, setStylistId] = useState<string | null>(null);
 
   // selection
   const [category, setCategory] = useState<string | null>(null);
@@ -64,14 +66,29 @@ export default function BookPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch("/api/catalog")
+    fetch("/api/stylists")
+      .then((r) => r.json())
+      .then((d) => {
+        const list = d.stylists ?? [];
+        setStylists(list);
+        if (list.length === 1) setStylistId(list[0].id);
+        else setLoading(false); // >1 (or 0) -> show picker; catalog loads after a pick
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // Load the chosen stylist's catalog.
+  useEffect(() => {
+    if (!stylistId) return;
+    setLoading(true);
+    fetch(`/api/catalog?stylistId=${stylistId}`)
       .then((r) => r.json())
       .then((d) => {
         setCatalog(d);
         setOpenDays(d.openDays ?? []);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [stylistId]);
 
   const categories = useMemo(() => {
     if (!catalog) return [];
@@ -111,6 +128,7 @@ export default function BookPage() {
     setSlotsLoading(true);
     setStartTime(null);
     const params = new URLSearchParams({ date, serviceId: service.id, minutes: String(workMinutes) });
+    if (stylistId) params.set("stylistId", stylistId);
     if (sizeId) params.set("tierId", sizeId);
     fetch(`/api/availability?${params}`)
       .then((r) => r.json())
@@ -119,7 +137,7 @@ export default function BookPage() {
         setSlotReason(d.reason);
       })
       .finally(() => setSlotsLoading(false));
-  }, [date, service, workMinutes, sizeId]);
+  }, [date, service, workMinutes, sizeId, stylistId]);
 
   async function joinWaitlist() {
     if (!service || !date) return;
@@ -128,6 +146,7 @@ export default function BookPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        stylistId: stylistId ?? undefined,
         serviceId: service.id,
         tierId: sizeId,
         clientName: clientName || "Waitlist guest",
@@ -176,6 +195,7 @@ export default function BookPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        stylistId: stylistId ?? undefined,
         serviceId: service.id,
         tierId: sizeId,
         addonIds,
@@ -219,6 +239,35 @@ export default function BookPage() {
     );
   }
 
+  if (!stylistId && stylists.length > 1) {
+    return (
+      <Shell>
+        <div className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
+          <h1 className="mb-1 text-2xl font-bold">Choose your stylist</h1>
+          <p className="mb-6 text-muted-foreground">Pick who you&apos;d like to book with.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {stylists.map((st) => (
+              <button
+                key={st.id}
+                onClick={() => setStylistId(st.id)}
+                className="flex items-center gap-4 rounded-xl border border-border p-4 text-left transition hover:border-brand-300"
+              >
+                {st.avatar_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={st.avatar_url} alt="" className="h-14 w-14 flex-shrink-0 rounded-full object-cover" />
+                )}
+                <div className="min-w-0">
+                  <div className="font-semibold">{st.name}</div>
+                  {st.bio && <p className="line-clamp-2 text-sm text-muted-foreground">{st.bio}</p>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <div className="mx-auto max-w-3xl px-4 py-8 sm:py-12">
@@ -245,7 +294,12 @@ export default function BookPage() {
 
         {step === 0 && (
           <div>
-            <h1 className="mb-1 text-2xl font-bold">Choose your style</h1>
+            {stylists.length > 1 && (
+              <button onClick={() => { setStylistId(null); setService(null); setDate(null); }} className="mb-3 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+                <ChevronLeft className="mr-1 h-4 w-4" /> Choose a different stylist
+              </button>
+            )}
+            <h1 className="mb-1 text-2xl font-bold">Choose your style{catalog?.stylist ? ` with ${catalog.stylist.name}` : ""}</h1>
             <p className="mb-6 text-muted-foreground">Prices and times shown up front — no surprises.</p>
 
             <div className="mb-6 flex flex-wrap gap-2">

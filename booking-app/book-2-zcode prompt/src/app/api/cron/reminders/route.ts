@@ -56,8 +56,7 @@ export async function POST(request: Request) {
   const { data: appts24 } = await supabase
     .from("appointments")
     .select(SELECT)
-    .eq("stylist_id", STYLIST_ID)
-    .eq("status", "confirmed")
+        .eq("status", "confirmed")
     .eq("date", tomorrow)
     .is("reminder_24h_sent_at", null);
   for (const r of (appts24 ?? []) as unknown as Row[]) {
@@ -74,8 +73,7 @@ export async function POST(request: Request) {
   const { data: apptsToday } = await supabase
     .from("appointments")
     .select(SELECT)
-    .eq("stylist_id", STYLIST_ID)
-    .eq("status", "confirmed")
+        .eq("status", "confirmed")
     .eq("date", now.dateStr)
     .is("reminder_2h_sent_at", null);
   for (const r of (apptsToday ?? []) as unknown as Row[]) {
@@ -95,8 +93,7 @@ export async function POST(request: Request) {
   const { data: done } = await supabase
     .from("appointments")
     .select(SELECT)
-    .eq("stylist_id", STYLIST_ID)
-    .eq("status", "completed")
+        .eq("status", "completed")
     .is("review_request_sent_at", null);
   for (const r of (done ?? []) as unknown as Row[]) {
     try {

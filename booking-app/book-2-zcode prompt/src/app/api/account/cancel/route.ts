@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { hoursUntilSalon } from "@/lib/time";
+import { notifyWaitlistOnOpening } from "@/lib/waitlist";
 
 const schema = z.object({ appointmentId: z.string().uuid() });
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   // Ownership via RLS: this select only returns the row if it's the user's.
   const { data: appt } = await supabase
     .from("appointments")
-    .select("id,date,start_time,status,stylist_id")
+    .select("id,date,start_time,status,stylist_id,service_id")
     .eq("id", parsed.data.appointmentId)
     .maybeSingle();
   if (!appt) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
     .from("appointments")
     .update({ status: "cancelled", cancelled_reason: "Cancelled by client" })
     .eq("id", appt.id);
+
+  await notifyWaitlistOnOpening(appt.stylist_id, appt.date, appt.service_id).catch(() => {});
 
   return NextResponse.json({ ok: true, refunded, withinWindow });
 }

@@ -50,8 +50,11 @@ const bk2 = await bookDeposit("e2e_resch@example.com", SVC.cornrows, salonDay(7)
 await adminFetch("/api/admin/appointments",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,action:"confirm"})});
 const badMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:salonDay(8),startTime:"03:00"})}); // 3am = outside hours
 ok("reschedule to out-of-hours 03:00 rejected (409)", badMove.status===409, `status=${badMove.status} ${JSON.stringify(badMove.json)}`);
-const goodMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:salonDay(8),startTime:"11:00"})});
-ok("reschedule to valid 11:00 accepted (200)", goodMove.status===200, `status=${goodMove.status} ${JSON.stringify(goodMove.json)}`);
+const moveDate = salonDay(8);
+const moveAvail = await (await fetch(`${BASE}/api/availability?date=${moveDate}&serviceId=${SVC.cornrows}&minutes=150`)).json();
+const validSlot = (moveAvail.slots||[])[0];
+const goodMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:moveDate,startTime:validSlot})});
+ok(`reschedule to a real open slot (${validSlot}) accepted (200)`, goodMove.status===200, `status=${goodMove.status} slot=${validSlot} ${JSON.stringify(goodMove.json)}`);
 
 console.log("\n[4] Decline -> auto-refund");
 const bk3 = await bookDeposit("e2e_decline@example.com", SVC.cornrows, salonDay(9), "12:00");

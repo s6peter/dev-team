@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
 
 const schema = z.object({
+  stylistId: z.string().uuid().optional(),
   serviceId: z.string().uuid().nullable().optional(),
   tierId: z.string().uuid().nullable().optional(),
   clientName: z.string().min(1).max(120),
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
 
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("waitlist_entries").insert({
-    stylist_id: STYLIST_ID,
+    stylist_id: b.stylistId || STYLIST_ID,
     service_id: b.serviceId ?? null,
     service_tier_id: b.tierId ?? null,
     client_name: b.clientName,

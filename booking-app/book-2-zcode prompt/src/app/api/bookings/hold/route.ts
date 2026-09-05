@@ -8,6 +8,7 @@ const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
 const HOLD_TTL_MINUTES = 15;
 
 const bodySchema = z.object({
+  stylistId: z.string().uuid().optional(),
   serviceId: z.string().uuid(),
   tierId: z.string().uuid().nullable().optional(),
   addonIds: z.array(z.string().uuid()).optional().default([]),
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
 
   // Reserve the slot + stash the booking payload (raises on conflict/past).
   const { data: hold, error: holdErr } = await supabase.rpc("hold_slot", {
-    p_stylist: STYLIST_ID,
+    p_stylist: b.stylistId || STYLIST_ID,
     p_service: b.serviceId,
     p_tier: (b.tierId ?? null) as string,
     p_date: b.date,
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
     customer: customerId,
     setup_future_usage: "off_session", // save the card for no-show / late-cancel fees
     automatic_payment_methods: { enabled: true },
-    metadata: { hold_id: h.id, stylist_id: STYLIST_ID, kind: "deposit", customer_id: customerId },
+    metadata: { hold_id: h.id, stylist_id: b.stylistId || STYLIST_ID, kind: "deposit", customer_id: customerId },
   });
 
   await supabase.from("slot_holds").update({ stripe_payment_intent_id: pi.id }).eq("id", h.id);

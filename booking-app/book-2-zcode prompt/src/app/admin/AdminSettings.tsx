@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Save, ScrollText, Store } from "lucide-react";
+import { CalendarDays, Check, Copy, Loader2, Save, ScrollText, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Profile {
@@ -24,6 +24,7 @@ interface Policy {
 interface SettingsResponse {
   profile: Profile;
   policy: Policy | null;
+  calendarFeedUrl?: string;
 }
 
 interface ProfileForm {
@@ -116,6 +117,8 @@ export function AdminSettings() {
   const [policySaving, setPolicySaving] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySaved, setPolicySaved] = useState(false);
+  const [feedUrl, setFeedUrl] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,6 +126,7 @@ export function AdminSettings() {
     try {
       const data = await apiFetch<SettingsResponse>("/api/admin/settings");
       setEmail(data.profile.email);
+      setFeedUrl(data.calendarFeedUrl ?? "");
       setProfileForm({
         name: data.profile.name ?? "",
         phone: data.profile.phone ?? "",
@@ -264,6 +268,28 @@ export function AdminSettings() {
         </div>
       ) : (
         <div className="space-y-8">
+          {/* CALENDAR SYNC */}
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-brand-600" />
+              <h2 className="text-lg font-semibold">Calendar sync</h2>
+            </div>
+            <div className="rounded-xl border border-border p-4 sm:p-6">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Subscribe to this private link in Google Calendar (Other calendars → From URL), Apple Calendar, or Outlook to see all your appointments — it refreshes automatically. Keep the link private.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input readOnly value={feedUrl} className="flex-1 rounded-lg border border-border bg-muted/40 p-2.5 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+                <Button
+                  variant="outline"
+                  onClick={() => { navigator.clipboard.writeText(feedUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}
+                >
+                  {copied ? <><Check className="mr-1 h-4 w-4" />Copied</> : <><Copy className="mr-1 h-4 w-4" />Copy</>}
+                </Button>
+              </div>
+            </div>
+          </section>
+
           {/* BUSINESS PROFILE */}
           <section>
             <div className="mb-3 flex items-center gap-2">

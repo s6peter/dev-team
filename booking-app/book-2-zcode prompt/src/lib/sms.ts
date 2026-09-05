@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { logNotification } from "@/lib/notification-log";
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -12,13 +13,16 @@ const client = accountSid && authToken ? twilio(accountSid, authToken) : null;
 export async function sendSMS({ to, body }: { to: string; body: string }): Promise<boolean> {
   if (!client || !fromNumber) {
     console.log(`\n📱 [dev sms] → ${to}\n   ${body}\n`);
+    await logNotification({ channel: "sms", recipient: to, body, status: "logged" });
     return true;
   }
   try {
     await client.messages.create({ body, from: fromNumber, to });
+    await logNotification({ channel: "sms", recipient: to, body, status: "sent" });
     return true;
   } catch (error) {
     console.error("SMS send error:", error);
+    await logNotification({ channel: "sms", recipient: to, body, status: "failed" });
     return false;
   }
 }

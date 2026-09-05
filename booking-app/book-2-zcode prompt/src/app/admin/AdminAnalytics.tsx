@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckCircle2,
   DollarSign,
+  Download,
   Loader2,
   Trophy,
   UserX,
@@ -49,6 +50,10 @@ interface AnalyticsResponse {
 const RANGES = [3, 6, 12] as const;
 type RangeMonths = (typeof RANGES)[number];
 
+/** Compact date input styled to match the admin form controls. */
+const dateInputClass =
+  "rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -90,6 +95,8 @@ export function AdminAnalytics() {
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,6 +115,17 @@ export function AdminAnalytics() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /** Navigate to the export route so the browser downloads the CSV (auth cookie rides along). */
+  const downloadCsv = useCallback(() => {
+    const params = new URLSearchParams();
+    const from = exportFrom.trim();
+    const to = exportTo.trim();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const query = params.toString();
+    window.location.assign(query ? `/api/admin/export?${query}` : "/api/admin/export");
+  }, [exportFrom, exportTo]);
 
   const totals = data?.totals ?? null;
   const monthly = data?.monthly ?? [];
@@ -137,6 +155,45 @@ export function AdminAnalytics() {
               {n} months
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* EXPORT CSV */}
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 rounded-xl border border-border p-4">
+        <div className="flex items-center gap-2">
+          <Download className="h-5 w-5 text-brand-600" />
+          <div>
+            <h2 className="text-sm font-semibold leading-tight">Export appointments</h2>
+            <p className="text-xs text-muted-foreground">Tax-ready CSV. Leave dates blank for all time.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className="mb-1 block text-xs text-muted-foreground">From</span>
+            <input
+              type="date"
+              className={dateInputClass}
+              value={exportFrom}
+              max={exportTo || undefined}
+              onChange={(e) => setExportFrom(e.target.value)}
+              aria-label="Export start date"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-muted-foreground">To</span>
+            <input
+              type="date"
+              className={dateInputClass}
+              value={exportTo}
+              min={exportFrom || undefined}
+              onChange={(e) => setExportTo(e.target.value)}
+              aria-label="Export end date"
+            />
+          </label>
+          <Button className="bg-brand-500 hover:bg-brand-600" onClick={downloadCsv}>
+            <Download className="mr-1 h-4 w-4" />
+            Export CSV
+          </Button>
         </div>
       </div>
 
