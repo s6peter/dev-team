@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { hoursUntilSalon } from "@/lib/time";
 import { notifyWaitlistOnOpening } from "@/lib/waitlist";
+import { sendCancelledNotice } from "@/lib/notify-appointment";
 
 const schema = z.object({ appointmentId: z.string().uuid() });
 
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
     .update({ status: "cancelled", cancelled_reason: "Cancelled by client" })
     .eq("id", appt.id);
 
+  await sendCancelledNotice(appt.id, refunded).catch(() => {});
   await notifyWaitlistOnOpening(appt.stylist_id, appt.date, appt.service_id).catch(() => {});
 
   return NextResponse.json({ ok: true, refunded, withinWindow });

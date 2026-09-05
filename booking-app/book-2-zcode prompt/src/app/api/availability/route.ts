@@ -6,7 +6,7 @@ import { addDays, nowInSalonTz } from "@/lib/time";
 const STYLIST_ID_DEFAULT = process.env.NEXT_PUBLIC_STYLIST_ID!;
 
 /**
- * GET /api/availability?date=YYYY-MM-DD&serviceId=..&tierId=..
+ * GET /api/availability?date=YYYY-MM-DD&serviceId=..&variantId=..&tierId=..&minutes=..
  * Duration-aware, conflict-safe open slots. Reads busy ranges from active
  * appointments + live holds (service role, since holds are RLS-locked).
  */
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date");
   const serviceId = searchParams.get("serviceId");
+  const variantId = searchParams.get("variantId");
   const tierId = searchParams.get("tierId");
   const stylistId = searchParams.get("stylistId") || STYLIST_ID_DEFAULT;
 
@@ -28,15 +29,24 @@ export async function GET(request: Request) {
     .from("services")
     .select("duration_minutes,buffer_minutes")
     .eq("id", serviceId)
+    .eq("stylist_id", stylistId)
     .maybeSingle();
   if (!service) return NextResponse.json({ error: "Service not found" }, { status: 404 });
 
-  // `minutes` (total work minutes incl. selected size/length/add-ons) wins when
-  // provided by the wizard; otherwise fall back to service + single tier.
+  // Work-minutes precedence: explicit `minutes` from the wizard wins; else the
+  // selected variant's duration; else the service default (+ legacy tier addon).
   const minutesParam = searchParams.get("minutes");
   let serviceMinutes: number;
   if (minutesParam && Number.isFinite(Number(minutesParam))) {
     serviceMinutes = Number(minutesParam) + service.buffer_minutes;
+  } else if (variantId) {
+    const { data: variant } = await supabase
+      .from("service_variants")
+      .select("duration_minutes")
+      .eq("id", variantId)
+      .eq("service_id", serviceId)
+      .maybeSingle();
+    serviceMinutes = (variant?.duration_minutes ?? service.duration_minutes) + service.buffer_minutes;
   } else {
     serviceMinutes = service.duration_minutes + service.buffer_minutes;
     if (tierId) {

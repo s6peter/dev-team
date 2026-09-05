@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { getAdminStylist } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -30,15 +31,18 @@ export async function POST(request: Request) {
   const { name, email, phone, bio } = parsed.data;
 
   const supabase = createSupabaseAdminClient();
-  // temp password the owner shares with the stylist (they can change later)
-  const tempPassword = `Queen${Math.floor(1000 + (Date.now() % 9000))}!`;
+  // Strong, unguessable temp password the owner shares with the stylist (they change it later).
+  const tempPassword = `Qg-${randomBytes(9).toString("base64url")}`;
   const { data: created, error: authErr } = await supabase.auth.admin.createUser({ email, password: tempPassword, email_confirm: true });
-  let userId = created?.user?.id;
-  if (authErr && !/registered/i.test(authErr.message)) return NextResponse.json({ error: authErr.message }, { status: 500 });
-  if (!userId) {
-    const { data: list } = await supabase.auth.admin.listUsers();
-    userId = list.users.find((u) => u.email === email)?.id;
+  if (authErr) {
+    // Don't silently co-opt a pre-existing account (e.g. a client login) as staff,
+    // and never hand back a temp password that won't actually work.
+    if (/registered/i.test(authErr.message)) {
+      return NextResponse.json({ error: "That email already has an account. Use a different email for the new stylist." }, { status: 409 });
+    }
+    return NextResponse.json({ error: authErr.message }, { status: 500 });
   }
+  const userId = created?.user?.id;
 
   const { data: stylist, error: sErr } = await supabase.from("stylists")
     .insert({ name, email, phone: phone || null, bio: bio || null, user_id: userId ?? null, is_owner: false })

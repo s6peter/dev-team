@@ -28,6 +28,8 @@ export interface ApptNotice {
   depositCents?: number;
   balanceCents?: number;
   manageToken?: string | null;
+  stylistId?: string | null;
+  stylistName?: string | null;
 }
 
 const when = (a: ApptNotice) => `${formatDateLabel(a.date)} at ${formatTimeLabel(a.startTime)}`;
@@ -44,15 +46,15 @@ export async function notifyBookingReceived(a: ApptNotice) {
       a.depositCents ? ` of <strong>${formatCents(a.depositCents)}</strong>` : ""
     }. 🎉</p>
     <p><strong>${a.serviceName}</strong><br/>${when(a)}</p>
-    <p>Your appointment is <strong>pending approval</strong> — QueenG will confirm shortly.
+    <p>Your appointment is <strong>pending approval</strong> — ${a.stylistName || BRAND} will confirm shortly.
     ${a.balanceCents ? `The remaining balance of <strong>${formatCents(a.balanceCents)}</strong> is due in person.` : ""}</p>
     <p>Please arrive with hair washed, blow-dried and detangled.</p>
     <p><a href="${APP_URL}/account" style="color:#db2777">View your appointment →</a></p>
     ${manageLink(a)}`;
   await Promise.all([
-    sendEmail({ to: a.clientEmail, subject: "We got your booking request!", html: shell("Booking request received", body) }),
+    sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: "We got your booking request!", html: shell("Booking request received", body) }),
     a.clientPhone
-      ? sendSMS({ to: a.clientPhone, body: `${BRAND}: Deposit received for ${a.serviceName} on ${a.date} at ${formatTimeLabel(a.startTime)}. Pending approval — we'll confirm soon!` })
+      ? sendSMS({ to: a.clientPhone, stylistId: a.stylistId, body: `${BRAND}: Deposit received for ${a.serviceName} on ${a.date} at ${formatTimeLabel(a.startTime)}. Pending approval — we'll confirm soon!` })
       : Promise.resolve(true),
   ]);
 }
@@ -65,8 +67,8 @@ export async function notifyConfirmed(a: ApptNotice) {
     <p>See you soon!</p>
     ${manageLink(a)}`;
   await Promise.all([
-    sendEmail({ to: a.clientEmail, subject: "Your appointment is confirmed!", html: shell("Appointment confirmed", body) }),
-    a.clientPhone ? sendSMS({ to: a.clientPhone, body: `${BRAND}: Your ${a.serviceName} on ${a.date} at ${formatTimeLabel(a.startTime)} is CONFIRMED. See you then!` }) : Promise.resolve(true),
+    sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: "Your appointment is confirmed!", html: shell("Appointment confirmed", body) }),
+    a.clientPhone ? sendSMS({ to: a.clientPhone, stylistId: a.stylistId, body: `${BRAND}: Your ${a.serviceName} on ${a.date} at ${formatTimeLabel(a.startTime)} is CONFIRMED. See you then!` }) : Promise.resolve(true),
   ]);
 }
 
@@ -76,8 +78,32 @@ export async function notifyDeclined(a: ApptNotice, refunded: boolean) {
     ${refunded ? `<p>Your deposit has been <strong>refunded</strong> in full.</p>` : ""}
     <p>Please <a href="${APP_URL}/book" style="color:#db2777">pick another time</a> — we'd love to have you.</p>`;
   await Promise.all([
-    sendEmail({ to: a.clientEmail, subject: "Appointment update", html: shell("Appointment update", body) }),
-    a.clientPhone ? sendSMS({ to: a.clientPhone, body: `${BRAND}: We couldn't accommodate your ${a.date} appointment.${refunded ? " Your deposit was refunded." : ""} Please rebook.` }) : Promise.resolve(true),
+    sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: "Appointment update", html: shell("Appointment update", body) }),
+    a.clientPhone ? sendSMS({ to: a.clientPhone, stylistId: a.stylistId, body: `${BRAND}: We couldn't accommodate your ${a.date} appointment.${refunded ? " Your deposit was refunded." : ""} Please rebook.` }) : Promise.resolve(true),
+  ]);
+}
+
+export async function notifyRescheduled(a: ApptNotice) {
+  const body = `<p>Hi ${a.clientName},</p>
+    <p>Your appointment has been <strong>rescheduled</strong>. ✅</p>
+    <p><strong>${a.serviceName}</strong><br/>New time: ${when(a)}</p>
+    ${a.balanceCents ? `<p>Balance due in person: <strong>${formatCents(a.balanceCents)}</strong></p>` : ""}
+    <p>See you then!</p>
+    ${manageLink(a)}`;
+  await Promise.all([
+    sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: "Your appointment was rescheduled", html: shell("Appointment rescheduled", body) }),
+    a.clientPhone ? sendSMS({ to: a.clientPhone, stylistId: a.stylistId, body: `${BRAND}: Your ${a.serviceName} is now ${a.date} at ${formatTimeLabel(a.startTime)}. See you then!` }) : Promise.resolve(true),
+  ]);
+}
+
+export async function notifyCancelled(a: ApptNotice, refunded = false) {
+  const body = `<p>Hi ${a.clientName},</p>
+    <p>Your <strong>${a.serviceName}</strong> appointment on ${when(a)} has been <strong>cancelled</strong>.</p>
+    ${refunded ? `<p>Your deposit has been <strong>refunded</strong> in full.</p>` : ""}
+    <p>We'd love to see you again — <a href="${APP_URL}/book" style="color:#db2777">book a new time</a>.</p>`;
+  await Promise.all([
+    sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: "Your appointment was cancelled", html: shell("Appointment cancelled", body) }),
+    a.clientPhone ? sendSMS({ to: a.clientPhone, stylistId: a.stylistId, body: `${BRAND}: Your ${a.serviceName} on ${a.date} at ${formatTimeLabel(a.startTime)} was cancelled.${refunded ? " Deposit refunded." : ""}` }) : Promise.resolve(true),
   ]);
 }
 
@@ -90,8 +116,8 @@ export async function notifyReminder(a: ApptNotice, kind: "24h" | "2h") {
     ${a.balanceCents ? `Balance due in person: <strong>${formatCents(a.balanceCents)}</strong>.` : ""}</p>
     <p>Need to change it? <a href="${a.manageToken ? `${APP_URL}/manage/${a.manageToken}` : `${APP_URL}/account`}" style="color:#db2777">Manage your appointment →</a></p>`;
   await Promise.all([
-    sendEmail({ to: a.clientEmail, subject: `Reminder: your appointment is ${lead}`, html: shell("Appointment reminder", body) }),
-    a.clientPhone ? sendSMS({ to: a.clientPhone, body: `${BRAND} reminder: ${a.serviceName} ${lead} (${a.date} ${formatTimeLabel(a.startTime)}). Arrive with clean, blow-dried hair!` }) : Promise.resolve(true),
+    sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: `Reminder: your appointment is ${lead}`, html: shell("Appointment reminder", body) }),
+    a.clientPhone ? sendSMS({ to: a.clientPhone, stylistId: a.stylistId, body: `${BRAND} reminder: ${a.serviceName} ${lead} (${a.date} ${formatTimeLabel(a.startTime)}). Arrive with clean, blow-dried hair!` }) : Promise.resolve(true),
   ]);
 }
 
@@ -100,5 +126,5 @@ export async function notifyReviewRequest(a: ApptNotice) {
     <p>Thank you for visiting ${BRAND}! We hope you love your ${a.serviceName}. 💕</p>
     <p>Would you leave a quick review? It means the world to a small business.</p>
     <p><a href="${APP_URL}/account?review=1" style="background:#db2777;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Leave a review →</a></p>`;
-  await sendEmail({ to: a.clientEmail, subject: "How was your visit?", html: shell("We'd love your feedback", body) });
+  await sendEmail({ to: a.clientEmail, stylistId: a.stylistId, subject: "How was your visit?", html: shell("We'd love your feedback", body) });
 }

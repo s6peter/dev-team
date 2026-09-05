@@ -6,7 +6,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AccountClient, type AccountAppointment } from "./AccountClient";
 
-const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Appointments" };
 
@@ -14,13 +13,13 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // Link any guest client rows created at booking time to this user.
+  // Link any guest client rows created at booking time to this user — across ALL
+  // stylists, so clients of any team member (not just the owner) see their appts.
   const admin = createSupabaseAdminClient();
   if (user.email) {
     await admin
       .from("clients")
       .update({ user_id: user.id })
-      .eq("stylist_id", STYLIST_ID)
       .eq("email", user.email)
       .is("user_id", null);
   }

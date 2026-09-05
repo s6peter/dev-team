@@ -1,0 +1,1867 @@
+{
+  "groups": [
+    {
+      "name": "Adult Braids",
+      "slug": "adult-braids",
+      "kind": "standard",
+      "sort": 1,
+      "description": "Box braids, knotless, twists and more \u2014 priced by size and length.",
+      "services": [
+        {
+          "name": "Box Braids",
+          "sort": 1,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 160,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 180,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 200,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 220,
+              "durationMin": 270
+            },
+            {
+              "size": "Large",
+              "length": "butt",
+              "label": "Large \u2014 Butt length",
+              "price": 240,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 170,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 190,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 210,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 240,
+              "durationMin": 330
+            },
+            {
+              "size": "Medium",
+              "length": "butt",
+              "label": "Medium \u2014 Butt length",
+              "price": 270,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 200,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 220,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 250,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 280,
+              "durationMin": 390
+            },
+            {
+              "size": "Small",
+              "length": "butt",
+              "label": "Small \u2014 Butt length",
+              "price": 300,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "shoulder",
+              "label": "Extra Small \u2014 Shoulder length",
+              "price": 280,
+              "durationMin": 390
+            },
+            {
+              "size": "Extra Small",
+              "length": "bra",
+              "label": "Extra Small \u2014 Bra length",
+              "price": 300,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "midback",
+              "label": "Extra Small \u2014 Midback length",
+              "price": 330,
+              "durationMin": 450
+            },
+            {
+              "size": "Extra Small",
+              "length": "waist",
+              "label": "Extra Small \u2014 Waist length",
+              "price": 350,
+              "durationMin": 480
+            },
+            {
+              "size": "Extra Small",
+              "length": "butt",
+              "label": "Extra Small \u2014 Butt length",
+              "price": 400,
+              "durationMin": 510
+            }
+          ]
+        },
+        {
+          "name": "Knotless Braids",
+          "sort": 2,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 130,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 150,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 180,
+              "durationMin": 270
+            },
+            {
+              "size": "Large",
+              "length": "butt",
+              "label": "Large \u2014 Butt length",
+              "price": 200,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 160,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 180,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 200,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 220,
+              "durationMin": 330
+            },
+            {
+              "size": "Medium",
+              "length": "butt",
+              "label": "Medium \u2014 Butt length",
+              "price": 250,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 200,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 220,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 250,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 280,
+              "durationMin": 390
+            },
+            {
+              "size": "Small",
+              "length": "butt",
+              "label": "Small \u2014 Butt length",
+              "price": 300,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "shoulder",
+              "label": "Extra Small \u2014 Shoulder length",
+              "price": 260,
+              "durationMin": 390
+            },
+            {
+              "size": "Extra Small",
+              "length": "bra",
+              "label": "Extra Small \u2014 Bra length",
+              "price": 300,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "midback",
+              "label": "Extra Small \u2014 Midback length",
+              "price": 350,
+              "durationMin": 450
+            },
+            {
+              "size": "Extra Small",
+              "length": "waist",
+              "label": "Extra Small \u2014 Waist length",
+              "price": 380,
+              "durationMin": 480
+            },
+            {
+              "size": "Extra Small",
+              "length": "butt",
+              "label": "Extra Small \u2014 Butt length",
+              "price": 420,
+              "durationMin": 510
+            }
+          ]
+        },
+        {
+          "name": "Boho Knotless",
+          "sort": 3,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 150,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 170,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Large",
+              "length": "butt",
+              "label": "Large \u2014 Butt length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 240,
+              "durationMin": 330
+            },
+            {
+              "size": "Medium",
+              "length": "butt",
+              "label": "Medium \u2014 Butt length",
+              "price": 270,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 240,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 270,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 300,
+              "durationMin": 390
+            },
+            {
+              "size": "Small",
+              "length": "butt",
+              "label": "Small \u2014 Butt length",
+              "price": 320,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "shoulder",
+              "label": "Extra Small \u2014 Shoulder length",
+              "price": 280,
+              "durationMin": 390
+            },
+            {
+              "size": "Extra Small",
+              "length": "bra",
+              "label": "Extra Small \u2014 Bra length",
+              "price": 320,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "midback",
+              "label": "Extra Small \u2014 Midback length",
+              "price": 370,
+              "durationMin": 450
+            },
+            {
+              "size": "Extra Small",
+              "length": "waist",
+              "label": "Extra Small \u2014 Waist length",
+              "price": 400,
+              "durationMin": 480
+            },
+            {
+              "size": "Extra Small",
+              "length": "butt",
+              "label": "Extra Small \u2014 Butt length",
+              "price": 440,
+              "durationMin": 510
+            }
+          ]
+        },
+        {
+          "name": "Micro Braids",
+          "sort": 4,
+          "variants": [
+            {
+              "size": "Medium",
+              "length": null,
+              "label": "Medium",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": null,
+              "label": "Small",
+              "price": 250,
+              "durationMin": 360
+            },
+            {
+              "size": "Extra Small",
+              "length": null,
+              "label": "Extra Small",
+              "price": 300,
+              "durationMin": 420
+            }
+          ]
+        },
+        {
+          "name": "Kinky & Havana Twist",
+          "sort": 5,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 140,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 160,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 200,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 220,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 280,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 300,
+              "durationMin": 390
+            }
+          ]
+        },
+        {
+          "name": "Senegalese Twist",
+          "sort": 6,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 150,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 170,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 200,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 220,
+              "durationMin": 270
+            },
+            {
+              "size": "Large",
+              "length": "butt",
+              "label": "Large \u2014 Butt length",
+              "price": 250,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Medium",
+              "length": "butt",
+              "label": "Medium \u2014 Butt length",
+              "price": 280,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 280,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 300,
+              "durationMin": 390
+            },
+            {
+              "size": "Small",
+              "length": "butt",
+              "label": "Small \u2014 Butt length",
+              "price": 350,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "shoulder",
+              "label": "Extra Small \u2014 Shoulder length",
+              "price": 300,
+              "durationMin": 390
+            },
+            {
+              "size": "Extra Small",
+              "length": "bra",
+              "label": "Extra Small \u2014 Bra length",
+              "price": 350,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "midback",
+              "label": "Extra Small \u2014 Midback length",
+              "price": 400,
+              "durationMin": 450
+            },
+            {
+              "size": "Extra Small",
+              "length": "waist",
+              "label": "Extra Small \u2014 Waist length",
+              "price": 450,
+              "durationMin": 480
+            },
+            {
+              "size": "Extra Small",
+              "length": "butt",
+              "label": "Extra Small \u2014 Butt length",
+              "price": 500,
+              "durationMin": 510
+            }
+          ]
+        },
+        {
+          "name": "Passion Twist",
+          "sort": 7,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 160,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 170,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Large",
+              "length": "butt",
+              "label": "Large \u2014 Butt length",
+              "price": 230,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Medium",
+              "length": "butt",
+              "label": "Medium \u2014 Butt length",
+              "price": 280,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 200,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 220,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 250,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 280,
+              "durationMin": 390
+            },
+            {
+              "size": "Small",
+              "length": "butt",
+              "label": "Small \u2014 Butt length",
+              "price": 300,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "shoulder",
+              "label": "Extra Small \u2014 Shoulder length",
+              "price": 320,
+              "durationMin": 390
+            },
+            {
+              "size": "Extra Small",
+              "length": "bra",
+              "label": "Extra Small \u2014 Bra length",
+              "price": 350,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "midback",
+              "label": "Extra Small \u2014 Midback length",
+              "price": 380,
+              "durationMin": 450
+            }
+          ]
+        },
+        {
+          "name": "Island Twist",
+          "sort": 8,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 200,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 230,
+              "durationMin": 240
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 250,
+              "durationMin": 270
+            },
+            {
+              "size": "Large",
+              "length": "butt",
+              "label": "Large \u2014 Butt length",
+              "price": 280,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 210,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 230,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 250,
+              "durationMin": 300
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 280,
+              "durationMin": 330
+            },
+            {
+              "size": "Medium",
+              "length": "butt",
+              "label": "Medium \u2014 Butt length",
+              "price": 310,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 250,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 280,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 310,
+              "durationMin": 360
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 330,
+              "durationMin": 390
+            },
+            {
+              "size": "Small",
+              "length": "butt",
+              "label": "Small \u2014 Butt length",
+              "price": 380,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "shoulder",
+              "label": "Extra Small \u2014 Shoulder length",
+              "price": 330,
+              "durationMin": 390
+            },
+            {
+              "size": "Extra Small",
+              "length": "bra",
+              "label": "Extra Small \u2014 Bra length",
+              "price": 380,
+              "durationMin": 420
+            },
+            {
+              "size": "Extra Small",
+              "length": "midback",
+              "label": "Extra Small \u2014 Midback length",
+              "price": 430,
+              "durationMin": 450
+            },
+            {
+              "size": "Extra Small",
+              "length": "waist",
+              "label": "Extra Small \u2014 Waist length",
+              "price": 480,
+              "durationMin": 480
+            },
+            {
+              "size": "Extra Small",
+              "length": "butt",
+              "label": "Extra Small \u2014 Butt length",
+              "price": 530,
+              "durationMin": 510
+            }
+          ]
+        },
+        {
+          "name": "Crochets",
+          "sort": 9,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Cornrow base (pre-looped)",
+              "price": 120,
+              "priceFrom": false,
+              "durationMin": 150
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Cornrow base (not pre-looped)",
+              "price": 150,
+              "priceFrom": false,
+              "durationMin": 180
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Individual braids \u2014 medium",
+              "price": 200,
+              "priceFrom": false,
+              "durationMin": 240
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Individual braids \u2014 small",
+              "price": 220,
+              "priceFrom": false,
+              "durationMin": 300
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Butterfly locks",
+              "price": 250,
+              "priceFrom": false,
+              "durationMin": 240
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Soft locks",
+              "price": 300,
+              "priceFrom": false,
+              "durationMin": 300
+            }
+          ]
+        },
+        {
+          "name": "Cornrows",
+          "sort": 10,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Simple style, no extension",
+              "price": 60,
+              "priceFrom": true,
+              "durationMin": 90
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Simple style, with extension",
+              "price": 100,
+              "priceFrom": true,
+              "durationMin": 120
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Feed-in ponytail \u2014 medium (bra)",
+              "price": 140,
+              "priceFrom": false,
+              "durationMin": 120
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Feed-in ponytail \u2014 small (bra)",
+              "price": 170,
+              "priceFrom": false,
+              "durationMin": 150
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Tribal braids \u2014 medium",
+              "price": 150,
+              "priceFrom": true,
+              "durationMin": 150
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Tribal braids \u2014 small",
+              "price": 180,
+              "priceFrom": true,
+              "durationMin": 180
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "Lemonade braids",
+              "price": 150,
+              "priceFrom": true,
+              "durationMin": 150
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "2 layers \u2014 medium (bra)",
+              "price": 220,
+              "priceFrom": false,
+              "durationMin": 150
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "2 layers \u2014 medium (midback)",
+              "price": 240,
+              "priceFrom": false,
+              "durationMin": 165
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "2 layers \u2014 medium (waist)",
+              "price": 260,
+              "priceFrom": false,
+              "durationMin": 180
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "2 layers \u2014 small (bra)",
+              "price": 280,
+              "priceFrom": false,
+              "durationMin": 180
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "2 layers \u2014 small (midback)",
+              "price": 300,
+              "priceFrom": false,
+              "durationMin": 195
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "2 layers \u2014 waist",
+              "price": 350,
+              "priceFrom": false,
+              "durationMin": 210
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "3 layers \u2014 medium (bra)",
+              "price": 300,
+              "priceFrom": false,
+              "durationMin": 180
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "3 layers \u2014 medium (midback)",
+              "price": 320,
+              "priceFrom": false,
+              "durationMin": 195
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "3 layers \u2014 medium (waist)",
+              "price": 340,
+              "priceFrom": false,
+              "durationMin": 210
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "3 layers \u2014 small (bra)",
+              "price": 360,
+              "priceFrom": false,
+              "durationMin": 210
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "3 layers \u2014 small (midback)",
+              "price": 380,
+              "priceFrom": false,
+              "durationMin": 225
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "3 layers \u2014 waist",
+              "price": 400,
+              "priceFrom": false,
+              "durationMin": 240
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kids Braids",
+      "slug": "kids-braids",
+      "kind": "standard",
+      "sort": 2,
+      "description": "Gentle braided styles for children (ages 5\u201312), by size and length.",
+      "services": [
+        {
+          "name": "Kids Box Braids",
+          "sort": 1,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 150,
+              "durationMin": 150
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 180,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 200,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 220,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 210
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 200,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 220,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 250,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 280,
+              "durationMin": 360
+            }
+          ]
+        },
+        {
+          "name": "Kids Knotless",
+          "sort": 2,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 140,
+              "durationMin": 150
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 170,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 190,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 210,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 170,
+              "durationMin": 210
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 190,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 210,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 240,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 190,
+              "durationMin": 270
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 210,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 240,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 270,
+              "durationMin": 360
+            }
+          ]
+        },
+        {
+          "name": "Kids Boho Knotless",
+          "sort": 3,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 170,
+              "durationMin": 150
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 200,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 220,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 240,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 200,
+              "durationMin": 210
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 220,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 240,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 270,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 220,
+              "durationMin": 270
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 240,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 270,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 300,
+              "durationMin": 360
+            }
+          ]
+        },
+        {
+          "name": "Kids Kinky & Havana Twist",
+          "sort": 4,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 100,
+              "durationMin": 150
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 130,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 150,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 150,
+              "durationMin": 210
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 270
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 270,
+              "durationMin": 360
+            }
+          ]
+        },
+        {
+          "name": "Kids Senegalese Twist",
+          "sort": 5,
+          "variants": [
+            {
+              "size": "Large",
+              "length": "shoulder",
+              "label": "Large \u2014 Shoulder length",
+              "price": 100,
+              "durationMin": 150
+            },
+            {
+              "size": "Large",
+              "length": "bra",
+              "label": "Large \u2014 Bra length",
+              "price": 130,
+              "durationMin": 180
+            },
+            {
+              "size": "Large",
+              "length": "midback",
+              "label": "Large \u2014 Midback length",
+              "price": 150,
+              "durationMin": 210
+            },
+            {
+              "size": "Large",
+              "length": "waist",
+              "label": "Large \u2014 Waist length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "shoulder",
+              "label": "Medium \u2014 Shoulder length",
+              "price": 150,
+              "durationMin": 210
+            },
+            {
+              "size": "Medium",
+              "length": "bra",
+              "label": "Medium \u2014 Bra length",
+              "price": 180,
+              "durationMin": 240
+            },
+            {
+              "size": "Medium",
+              "length": "midback",
+              "label": "Medium \u2014 Midback length",
+              "price": 200,
+              "durationMin": 270
+            },
+            {
+              "size": "Medium",
+              "length": "waist",
+              "label": "Medium \u2014 Waist length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "shoulder",
+              "label": "Small \u2014 Shoulder length",
+              "price": 180,
+              "durationMin": 270
+            },
+            {
+              "size": "Small",
+              "length": "bra",
+              "label": "Small \u2014 Bra length",
+              "price": 220,
+              "durationMin": 300
+            },
+            {
+              "size": "Small",
+              "length": "midback",
+              "label": "Small \u2014 Midback length",
+              "price": 250,
+              "durationMin": 330
+            },
+            {
+              "size": "Small",
+              "length": "waist",
+              "label": "Small \u2014 Waist length",
+              "price": 270,
+              "durationMin": 360
+            }
+          ]
+        },
+        {
+          "name": "Kids Cornrows",
+          "sort": 6,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Kids cornrows",
+              "price": 70,
+              "priceFrom": true,
+              "durationMin": 90
+            }
+          ]
+        },
+        {
+          "name": "Kids Crochets",
+          "sort": 7,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Kids crochets",
+              "price": 100,
+              "priceFrom": true,
+              "durationMin": 120
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mens Braids",
+      "slug": "mens-braids",
+      "kind": "standard",
+      "sort": 3,
+      "description": "Cornrows and natural-hair styles for men.",
+      "services": [
+        {
+          "name": "Cornrows (Men)",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "10 cornrows \u2014 simple, no design",
+              "price": 50,
+              "durationMin": 60
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "10+ cornrows \u2014 simple, no design",
+              "price": 70,
+              "durationMin": 75
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "8 cornrows \u2014 simple, with design",
+              "price": 80,
+              "durationMin": 90
+            },
+            {
+              "size": null,
+              "length": null,
+              "label": "8+ cornrows \u2014 simple, with design",
+              "price": 100,
+              "durationMin": 105
+            }
+          ]
+        },
+        {
+          "name": "Natural Hair Twist (Men)",
+          "sort": 2,
+          "variants": [
+            {
+              "size": "Large",
+              "length": null,
+              "label": "Large",
+              "price": 80,
+              "durationMin": 60
+            },
+            {
+              "size": "Medium",
+              "length": null,
+              "label": "Medium",
+              "price": 100,
+              "durationMin": 90
+            }
+          ]
+        },
+        {
+          "name": "Natural Hair Braids (Men)",
+          "sort": 3,
+          "variants": [
+            {
+              "size": "Large",
+              "length": null,
+              "label": "Large",
+              "price": 80,
+              "durationMin": 60
+            },
+            {
+              "size": "Medium",
+              "length": null,
+              "label": "Medium",
+              "price": 100,
+              "durationMin": 90
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Custom Styles",
+      "slug": "custom-styles",
+      "kind": "custom",
+      "sort": 4,
+      "description": "Bespoke and specialty styles \u2014 pay the deposit, upload your inspiration photo, and we'll call to confirm the details and final price.",
+      "services": [
+        {
+          "name": "Tree Braids",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Tree Braids",
+              "price": 250,
+              "priceFrom": true,
+              "durationMin": 240
+            }
+          ]
+        },
+        {
+          "name": "Fulani Braids",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Fulani Braids",
+              "price": 200,
+              "priceFrom": true,
+              "durationMin": 180
+            }
+          ]
+        },
+        {
+          "name": "Sew Ins",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Sew Ins",
+              "price": 80,
+              "priceFrom": true,
+              "durationMin": 150
+            }
+          ]
+        },
+        {
+          "name": "Natural Hair Twist",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Natural Hair Twist",
+              "price": 80,
+              "priceFrom": true,
+              "durationMin": 120
+            }
+          ]
+        },
+        {
+          "name": "Braids Take-down",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Braids Take-down",
+              "price": 60,
+              "priceFrom": true,
+              "durationMin": 90
+            }
+          ]
+        },
+        {
+          "name": "Wig Take-down",
+          "sort": 1,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Wig Take-down",
+              "price": 50,
+              "priceFrom": true,
+              "durationMin": 60
+            }
+          ]
+        },
+        {
+          "name": "Custom / Describe Your Style",
+          "sort": 7,
+          "variants": [
+            {
+              "size": null,
+              "length": null,
+              "label": "Custom style (consultation)",
+              "price": 50,
+              "priceFrom": true,
+              "durationMin": 180
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

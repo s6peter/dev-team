@@ -4,6 +4,7 @@ import { getAdminStylist } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { stripe } from "@/lib/stripe";
 import { notifyConfirmed, notifyDeclined, type ApptNotice } from "@/lib/notifications";
+import { sendRescheduledNotice } from "@/lib/notify-appointment";
 import { computePricing } from "@/lib/pricing";
 import { minutesToTime, timeToMinutes, addDays } from "@/lib/time";
 import { notifyWaitlistOnOpening } from "@/lib/waitlist";
@@ -99,6 +100,8 @@ export async function PATCH(request: Request) {
       date: appt.date,
       startTime: appt.start_time,
       balanceCents: appt.balance_due_cents,
+      stylistId: stylist.id,
+      stylistName: stylist.name,
     };
     if (action === "confirm") await notifyConfirmed(notice).catch(() => {});
     else if (action === "decline") await notifyDeclined(notice, refunded).catch(() => {});
@@ -144,6 +147,7 @@ export async function POST(request: Request) {
       .from("service_tiers")
       .select("price_addon,duration_addon")
       .eq("id", b.tierId)
+      .eq("service_id", b.serviceId)
       .maybeSingle();
     if (tier) {
       minutes += tier.duration_addon;
@@ -253,5 +257,6 @@ export async function PUT(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   const result = await rescheduleAppointment(parsed.data.appointmentId, parsed.data.date, parsed.data.startTime, { stylistId: stylist.id });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  await sendRescheduledNotice(parsed.data.appointmentId).catch(() => {});
   return NextResponse.json({ ok: true });
 }

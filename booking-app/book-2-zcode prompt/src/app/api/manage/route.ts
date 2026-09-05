@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { rescheduleAppointment } from "@/lib/reschedule";
 import { stripe } from "@/lib/stripe";
 import { notifyWaitlistOnOpening } from "@/lib/waitlist";
+import { sendRescheduledNotice, sendCancelledNotice } from "@/lib/notify-appointment";
 import { hoursUntilSalon } from "@/lib/time";
 
 const schema = z.object({
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     if (!date || !startTime) return NextResponse.json({ error: "Pick a new time." }, { status: 400 });
     const result = await rescheduleAppointment(appt.id, date, startTime, { enforcePolicy: true });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    await sendRescheduledNotice(appt.id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 
@@ -53,6 +55,7 @@ export async function POST(request: Request) {
     }
   }
   await supabase.from("appointments").update({ status: "cancelled", cancelled_reason: "Cancelled by client" }).eq("id", appt.id);
+  await sendCancelledNotice(appt.id, refunded).catch(() => {});
   await notifyWaitlistOnOpening(appt.stylist_id, appt.date, appt.service_id).catch(() => {});
   return NextResponse.json({ ok: true, refunded });
 }

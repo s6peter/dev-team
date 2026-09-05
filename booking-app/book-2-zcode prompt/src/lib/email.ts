@@ -14,15 +14,17 @@ export async function sendEmail({
   subject,
   html,
   text,
+  stylistId,
 }: {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  stylistId?: string | null;
 }): Promise<boolean> {
   if (!resend) {
     console.log(`\n📧 [dev email] → ${to}\n   subject: ${subject}\n   ${text ?? stripHtml(html)}\n`);
-    await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "logged" });
+    await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "logged", stylistId });
     return true;
   }
   try {
@@ -35,10 +37,10 @@ export async function sendEmail({
     });
     if (error) {
       console.error("Email send error:", error);
-      await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "failed" });
+      await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "failed", stylistId });
       return false;
     }
-    await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "sent" });
+    await logNotification({ channel: "email", recipient: to, subject, body: text ?? stripHtml(html), status: "sent", stylistId });
     return true;
   } catch (error) {
     console.error("Email send error:", error);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { rescheduleAppointment } from "@/lib/reschedule";
+import { sendRescheduledNotice } from "@/lib/notify-appointment";
 
 const schema = z.object({
   appointmentId: z.string().uuid(),
@@ -24,5 +25,6 @@ export async function POST(request: Request) {
 
   const result = await rescheduleAppointment(parsed.data.appointmentId, parsed.data.date, parsed.data.startTime, { enforcePolicy: true });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  await sendRescheduledNotice(parsed.data.appointmentId).catch(() => {});
   return NextResponse.json({ ok: true });
 }

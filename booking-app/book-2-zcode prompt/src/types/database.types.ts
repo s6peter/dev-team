@@ -58,6 +58,7 @@ export type Database = {
           review_request_sent_at: string | null
           service_id: string
           service_tier_id: string | null
+          service_variant_id: string | null
           service_total_cents: number
           start_time: string
           status: string
@@ -90,6 +91,7 @@ export type Database = {
           review_request_sent_at?: string | null
           service_id: string
           service_tier_id?: string | null
+          service_variant_id?: string | null
           service_total_cents?: number
           start_time: string
           status?: string
@@ -122,6 +124,7 @@ export type Database = {
           review_request_sent_at?: string | null
           service_id?: string
           service_tier_id?: string | null
+          service_variant_id?: string | null
           service_total_cents?: number
           start_time?: string
           status?: string
@@ -158,6 +161,13 @@ export type Database = {
             columns: ["service_tier_id"]
             isOneToOne: false
             referencedRelation: "service_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_service_variant_id_fkey"
+            columns: ["service_variant_id"]
+            isOneToOne: false
+            referencedRelation: "service_variants"
             referencedColumns: ["id"]
           },
           {
@@ -649,6 +659,113 @@ export type Database = {
           },
         ]
       }
+      service_groups: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          kind: string
+          name: string
+          slug: string
+          sort_order: number
+          stylist_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          kind?: string
+          name: string
+          slug: string
+          sort_order?: number
+          stylist_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          kind?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          stylist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_groups_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_variants: {
+        Row: {
+          created_at: string | null
+          duration_minutes: number
+          id: string
+          is_active: boolean
+          label: string
+          length: string | null
+          price_cents: number
+          price_from: boolean
+          service_id: string
+          size: string | null
+          sort_order: number
+          stylist_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          label: string
+          length?: string | null
+          price_cents?: number
+          price_from?: boolean
+          service_id: string
+          size?: string | null
+          sort_order?: number
+          stylist_id: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean
+          label?: string
+          length?: string | null
+          price_cents?: number
+          price_from?: boolean
+          service_id?: string
+          size?: string | null
+          sort_order?: number
+          stylist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_variants_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_variants_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_tiers: {
         Row: {
           description: string | null
@@ -701,6 +818,7 @@ export type Database = {
           deposit_percent: number
           description: string | null
           duration_minutes: number
+          group_id: string | null
           id: string
           image_url: string | null
           images: string[]
@@ -722,6 +840,7 @@ export type Database = {
           deposit_percent?: number
           description?: string | null
           duration_minutes: number
+          group_id?: string | null
           id?: string
           image_url?: string | null
           images?: string[]
@@ -743,6 +862,7 @@ export type Database = {
           deposit_percent?: number
           description?: string | null
           duration_minutes?: number
+          group_id?: string | null
           id?: string
           image_url?: string | null
           images?: string[]
@@ -755,6 +875,13 @@ export type Database = {
           tax_rate?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "services_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "service_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "services_stylist_id_fkey"
             columns: ["stylist_id"]
@@ -782,6 +909,7 @@ export type Database = {
           policy_consented: boolean
           service_id: string
           service_tier_id: string | null
+          service_variant_id: string | null
           service_total_cents: number
           start_time: string
           stripe_payment_intent_id: string | null
@@ -806,6 +934,7 @@ export type Database = {
           policy_consented?: boolean
           service_id: string
           service_tier_id?: string | null
+          service_variant_id?: string | null
           service_total_cents?: number
           start_time: string
           stripe_payment_intent_id?: string | null
@@ -830,6 +959,7 @@ export type Database = {
           policy_consented?: boolean
           service_id?: string
           service_tier_id?: string | null
+          service_variant_id?: string | null
           service_total_cents?: number
           start_time?: string
           stripe_payment_intent_id?: string | null
@@ -850,6 +980,13 @@ export type Database = {
             columns: ["service_tier_id"]
             isOneToOne: false
             referencedRelation: "service_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "slot_holds_service_variant_id_fkey"
+            columns: ["service_variant_id"]
+            isOneToOne: false
+            referencedRelation: "service_variants"
             referencedColumns: ["id"]
           },
           {
@@ -995,6 +1132,7 @@ export type Database = {
           p_start: string
           p_stylist: string
           p_tier: string
+          p_variant: string
           p_ttl_minutes: number
         }
         Returns: {
@@ -1014,6 +1152,7 @@ export type Database = {
           policy_consented: boolean
           service_id: string
           service_tier_id: string | null
+          service_variant_id: string | null
           service_total_cents: number
           start_time: string
           stripe_payment_intent_id: string | null

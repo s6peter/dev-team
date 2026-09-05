@@ -7,6 +7,11 @@ export async function GET() {
   const stylist = await getAdminStylist();
   if (!stylist) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const supabase = createSupabaseAdminClient();
-  const { data } = await supabase.from("notification_log").select("*").order("created_at", { ascending: false }).limit(200);
+  const { data } = await supabase
+    .from("notification_log")
+    .select("*")
+    .eq("stylist_id", stylist.id)
+    .order("created_at", { ascending: false })
+    .limit(200);
   return NextResponse.json({ messages: data ?? [] });
 }

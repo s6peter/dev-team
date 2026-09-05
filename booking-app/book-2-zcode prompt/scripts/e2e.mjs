@@ -1,5 +1,6 @@
 // Reproducible e2e harness: money + booking paths, incl. the judge-flagged fixes.
 //   node scripts/e2e.mjs      (requires dev server on :3456 + local Supabase + Stripe test)
+// v3: money paths driven by the LIVE grouped catalog (real variant ids), not old tier ids.
 import puppeteer from "puppeteer-core";
 import Stripe from "stripe";
 import { readFileSync } from "node:fs";
@@ -7,15 +8,40 @@ import { readFileSync } from "node:fs";
 const env = Object.fromEntries(readFileSync(".env.local","utf8").split("\n").filter(l=>l&&!l.startsWith("#")&&l.includes("=")).map(l=>{const i=l.indexOf("=");return[l.slice(0,i).trim(),l.slice(i+1).trim()];}));
 const stripe = new Stripe(env.STRIPE_SECRET_KEY);
 const BASE = "http://localhost:3456";
-const SVC = { knotless:"22222222-0000-0000-0000-000000000001", box:"22222222-0000-0000-0000-000000000002", cornrows:"22222222-0000-0000-0000-000000000003" };
+const OWNER = env.NEXT_PUBLIC_STYLIST_ID || "11111111-1111-1111-1111-111111111111";
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let pass=0, fail=0; const fails=[];
 const ok=(name,cond,detail="")=>{ if(cond){pass++;console.log(`  ✓ ${name}`);} else {fail++;fails.push(name);console.log(`  ✗ ${name}  ${detail}`);} };
 
 const salonDay = (offset=0)=>{ const t=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Chicago"})); t.setDate(t.getDate()+offset); return t.toLocaleDateString("en-CA"); };
 
-async function bookDeposit(email, svc, date, start){
-  const hold = await (await fetch(`${BASE}/api/bookings/hold`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceId:svc,tierId:null,addonIds:[],date,startTime:start,clientName:"E2E "+email.split("@")[0],clientEmail:email,clientPhone:"+15550000",notes:"",intake:[],inspirationPhotos:[],policyConsented:true})})).json();
+// ── Resolve real variants from the live grouped catalog ──────────────────────
+const cat = await (await fetch(`${BASE}/api/catalog?stylistId=${OWNER}`)).json();
+const groups = cat.groups || [];
+const findGroup = (pred)=> groups.find(pred);
+const stdGroup = findGroup(g=>g.slug==="adult-braids") || findGroup(g=>g.kind==="standard");
+const stdSvc = (stdGroup?.services||[]).find(s=>/box braids/i.test(s.name)) || (stdGroup?.services||[])[0];
+const stdVar = (stdSvc?.variants||[]).find(v=>!v.price_from) || (stdSvc?.variants||[])[0];
+const customGroup = findGroup(g=>g.kind==="custom");
+const customSvc = (customGroup?.services||[])[0];
+const customVar = (customSvc?.variants||[])[0];
+if(!stdVar || !customVar){ console.error("Could not resolve catalog variants", {stdSvc:stdSvc?.name, customSvc:customSvc?.name}); process.exit(2); }
+const STD_PRICE = stdVar.price_cents;                 // service total for the standard variant
+const STD_MIN = stdVar.duration_minutes || stdSvc.duration_minutes;
+console.log(`catalog: standard "${stdSvc.name} / ${stdVar.label}" $${STD_PRICE/100} (${STD_MIN}m)  |  custom "${customSvc.name} / ${customVar.label}"`);
+
+// First actually-open slot for a variant on a date (robust against foreign holds).
+async function firstSlot(serviceId, variantId, date, minutes){
+  const a = await (await fetch(`${BASE}/api/availability?date=${date}&serviceId=${serviceId}&variantId=${variantId}&minutes=${minutes}`)).json();
+  return (a.slots||[])[0];
+}
+
+// ── Book a deposit appointment via hold → Stripe confirm → confirm ───────────
+// start may be null → the first real open slot for that variant/date is used.
+async function bookDeposit(email, serviceId, variantId, date, start, photos=[], minutes){
+  if(!start) start = await firstSlot(serviceId, variantId, date, minutes ?? STD_MIN);
+  if(!start) return { error:"no open slot", hold:{} };
+  const hold = await (await fetch(`${BASE}/api/bookings/hold`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceId,variantId,tierId:null,addonIds:[],date,startTime:start,clientName:"E2E "+email.split("@")[0],clientEmail:email,clientPhone:"+15550000",notes:"",intake:[],inspirationPhotos:photos,policyConsented:true})})).json();
   if(!hold.paymentIntentId) return { error: hold.error||"hold failed", hold };
   await stripe.paymentIntents.confirm(hold.paymentIntentId,{payment_method:"pm_card_visa",return_url:BASE});
   const conf = await (await fetch(`${BASE}/api/bookings/confirm`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paymentIntentId:hold.paymentIntentId})})).json();
@@ -31,38 +57,49 @@ const adminFetch = (path, init) => p.evaluate(async (path, init) => { const r = 
 const adminOk = (await adminFetch("/api/admin/appointments")).status === 200;
 ok("admin session established", adminOk);
 
-console.log("\n[1] Booking + card-on-file");
-const bk = await bookDeposit("e2e_card@example.com", SVC.cornrows, salonDay(6), "09:00");
-ok("deposit booking created", !!bk.appointmentId, JSON.stringify(bk).slice(0,120));
-ok("amounts: tax-on-deposit ($50 dep, $4.13 tax, $40 balance)", bk.amounts && bk.amounts.depositCents===5000 && bk.amounts.taxCents===413 && bk.amounts.balanceDueCents===4000, JSON.stringify(bk.amounts));
+console.log("\n[1] Booking + card-on-file (standard variant, money from the variant)");
+const bk = await bookDeposit("e2e_card@example.com", stdSvc.id, stdVar.id, salonDay(6), null);
+ok("deposit booking created", !!bk.appointmentId, JSON.stringify(bk).slice(0,160));
+ok(`amounts: $50 flat deposit, tax-on-deposit only ($4.13), balance = price-50 ($${(STD_PRICE-5000)/100})`,
+   bk.amounts && bk.amounts.depositCents===5000 && bk.amounts.taxCents===413 && bk.amounts.serviceTotalCents===STD_PRICE && bk.amounts.balanceDueCents===STD_PRICE-5000 && bk.amounts.chargedNowCents===5413,
+   JSON.stringify(bk.amounts));
+
+console.log("\n[1b] Custom group: deposit-only (balance 0), inspiration photo attached");
+const bkC = await bookDeposit("e2e_custom@example.com", customSvc.id, customVar.id, salonDay(10), null, ["https://example.com/inspo.jpg"], customVar.duration_minutes||customSvc.duration_minutes);
+ok("custom booking created", !!bkC.appointmentId, JSON.stringify(bkC).slice(0,160));
+ok("custom: $50 deposit, tax $4.13, balance 0 (deposit-only)",
+   bkC.amounts && bkC.amounts.depositCents===5000 && bkC.amounts.taxCents===413 && bkC.amounts.balanceDueCents===0 && bkC.amounts.chargedNowCents===5413,
+   JSON.stringify(bkC.amounts));
 
 console.log("\n[2] No-show fee: deposit-netting + idempotency guard");
 await adminFetch("/api/admin/appointments",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk.appointmentId,action:"confirm"})});
 const preview = await adminFetch(`/api/admin/fees?appointmentId=${bk.appointmentId}&kind=no_show`);
-ok("fee preview nets deposit (gross $90 - $50 = $40)", preview.json && preview.json.feeCents===4000 && preview.json.grossCents===9000 && preview.json.depositHeldCents===5000, JSON.stringify(preview.json));
+ok(`fee preview nets deposit (gross $${STD_PRICE/100} - $50 = $${(STD_PRICE-5000)/100})`,
+   preview.json && preview.json.grossCents===STD_PRICE && preview.json.depositHeldCents===5000 && preview.json.feeCents===STD_PRICE-5000,
+   JSON.stringify(preview.json));
 const charge1 = await adminFetch("/api/admin/fees",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk.appointmentId,kind:"no_show"})});
 ok("fee charged once (succeeded)", charge1.json && charge1.json.ok && charge1.json.status==="succeeded", JSON.stringify(charge1.json));
 const charge2 = await adminFetch("/api/admin/fees",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk.appointmentId,kind:"no_show"})});
 ok("second fee blocked (no double-charge)", charge2.status===409, `status=${charge2.status} ${JSON.stringify(charge2.json)}`);
 
-console.log("\n[3] Reschedule: server-side availability re-validation");
-const bk2 = await bookDeposit("e2e_resch@example.com", SVC.cornrows, salonDay(7), "10:00");
+console.log("\n[3] Reschedule: server-side availability re-validation (variant-duration aware)");
+const bk2 = await bookDeposit("e2e_resch@example.com", stdSvc.id, stdVar.id, salonDay(7), null);
+ok("reschedule seed booking created", !!bk2.appointmentId, JSON.stringify(bk2).slice(0,160));
 await adminFetch("/api/admin/appointments",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,action:"confirm"})});
 const badMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:salonDay(8),startTime:"03:00"})}); // 3am = outside hours
 ok("reschedule to out-of-hours 03:00 rejected (409)", badMove.status===409, `status=${badMove.status} ${JSON.stringify(badMove.json)}`);
 const moveDate = salonDay(8);
-const moveAvail = await (await fetch(`${BASE}/api/availability?date=${moveDate}&serviceId=${SVC.cornrows}&minutes=150`)).json();
+const moveAvail = await (await fetch(`${BASE}/api/availability?date=${moveDate}&serviceId=${stdSvc.id}&variantId=${stdVar.id}&minutes=${STD_MIN}`)).json();
 const validSlot = (moveAvail.slots||[])[0];
 const goodMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:moveDate,startTime:validSlot})});
 ok(`reschedule to a real open slot (${validSlot}) accepted (200)`, goodMove.status===200, `status=${goodMove.status} slot=${validSlot} ${JSON.stringify(goodMove.json)}`);
 
 console.log("\n[4] Decline -> auto-refund");
-const bk3 = await bookDeposit("e2e_decline@example.com", SVC.cornrows, salonDay(9), "12:00");
+const bk3 = await bookDeposit("e2e_decline@example.com", stdSvc.id, stdVar.id, salonDay(9), null);
 const decline = await adminFetch("/api/admin/appointments",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk3.appointmentId,action:"decline"})});
 ok("decline returns refunded:true", decline.json && decline.json.refunded===true, JSON.stringify(decline.json));
 
 console.log("\n[5] .ics calendar invite");
-// fetch manage_token from DB-less path: use admin appts list to find bk.appointmentId's token? ics is by token; get token via a public path is not exposed. Skip token fetch; assert route shape on a known token via manage page is out of scope -> hit with a random uuid expecting 404.
 const icsBad = await (await fetch(`${BASE}/api/ics/00000000-0000-0000-0000-000000000000`)).status;
 ok(".ics route responds (404 for unknown token)", icsBad===404, `status=${icsBad}`);
 

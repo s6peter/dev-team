@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { Check, ChevronLeft, Clock, Loader2, MapPin, Upload, X } from "lucide-react";
+import { Check, ChevronLeft, Clock, Loader2, MapPin, Phone, Upload, X } from "lucide-react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,9 @@ import { getStripe } from "@/lib/stripe-client";
 import { computePricing, formatCents } from "@/lib/pricing";
 import { addDays, formatDateLabel, formatTimeLabel, nowInSalonTz } from "@/lib/time";
 import { formatDuration } from "@/lib/utils";
-import type { Catalog, CatalogService, CatalogTier } from "@/types/catalog";
+import type { Catalog, CatalogGroup, CatalogService, CatalogVariant } from "@/types/catalog";
+
+const SALON_PHONE = "(901) 631-1481";
 
 type Step = 0 | 1 | 2 | 3 | 4;
 const STEPS = ["Service", "Date & Time", "Your details", "Deposit", "Done"];
@@ -30,12 +32,10 @@ export default function BookPage() {
   const [stylists, setStylists] = useState<{ id: string; name: string; bio: string | null; avatar_url: string | null }[]>([]);
   const [stylistId, setStylistId] = useState<string | null>(null);
 
-  // selection
-  const [category, setCategory] = useState<string | null>(null);
+  // selection: group tile -> service (dropdown) -> variant (list row)
+  const [group, setGroup] = useState<CatalogGroup | null>(null);
   const [service, setService] = useState<CatalogService | null>(null);
-  const [sizeId, setSizeId] = useState<string | null>(null);
-  const [lengthId, setLengthId] = useState<string | null>(null);
-  const [addonIds, setAddonIds] = useState<string[]>([]);
+  const [variant, setVariant] = useState<CatalogVariant | null>(null);
 
   // datetime
   const [monthOffset, setMonthOffset] = useState(0);
@@ -90,37 +90,22 @@ export default function BookPage() {
       .finally(() => setLoading(false));
   }, [stylistId]);
 
-  const categories = useMemo(() => {
-    if (!catalog) return [];
-    return Array.from(new Set(catalog.services.map((s) => s.category)));
-  }, [catalog]);
+  const isCustom = group?.kind === "custom";
 
-  const sizeTiers = service?.tiers.filter((t) => t.kind === "size") ?? [];
-  const lengthTiers = service?.tiers.filter((t) => t.kind === "length") ?? [];
-  const addonTiers = service?.tiers.filter((t) => t.kind === "addon") ?? [];
-
-  const selectedTiers: CatalogTier[] = useMemo(() => {
-    if (!service) return [];
-    const ids = new Set([sizeId, lengthId, ...addonIds].filter(Boolean) as string[]);
-    return service.tiers.filter((t) => ids.has(t.id));
-  }, [service, sizeId, lengthId, addonIds]);
-
-  const tierAddonCents = selectedTiers.reduce((n, t) => n + t.price_addon, 0);
-  const workMinutes = (service?.duration_minutes ?? 0) + selectedTiers.reduce((n, t) => n + t.duration_addon, 0);
+  // The selected variant drives duration and price. Custom = deposit only.
+  const workMinutes = variant?.duration_minutes ?? service?.duration_minutes ?? 0;
 
   const pricing = useMemo(() => {
-    if (!service) return null;
+    if (!service || !variant) return null;
     return computePricing({
-      basePriceCents: service.base_price,
-      tierPriceAddonCents: tierAddonCents,
+      // Standard: charge the variant price. Custom: deposit only (balance $0).
+      basePriceCents: isCustom ? (service.deposit_flat_cents ?? variant.price_cents) : variant.price_cents,
       taxRate: service.tax_rate,
       depositPercent: service.deposit_percent,
       requiresDeposit: service.requires_deposit,
       depositFlatCents: service.deposit_flat_cents,
     });
-  }, [service, tierAddonCents]);
-
-  const canContinueService = Boolean(service && (sizeTiers.length === 0 || sizeId));
+  }, [service, variant, isCustom]);
 
   // fetch slots when date/duration changes
   useEffect(() => {
@@ -129,7 +114,7 @@ export default function BookPage() {
     setStartTime(null);
     const params = new URLSearchParams({ date, serviceId: service.id, minutes: String(workMinutes) });
     if (stylistId) params.set("stylistId", stylistId);
-    if (sizeId) params.set("tierId", sizeId);
+    if (variant) params.set("variantId", variant.id);
     fetch(`/api/availability?${params}`)
       .then((r) => r.json())
       .then((d) => {
@@ -137,7 +122,7 @@ export default function BookPage() {
         setSlotReason(d.reason);
       })
       .finally(() => setSlotsLoading(false));
-  }, [date, service, workMinutes, sizeId, stylistId]);
+  }, [date, service, workMinutes, variant, stylistId]);
 
   async function joinWaitlist() {
     if (!service || !date) return;
@@ -148,7 +133,7 @@ export default function BookPage() {
       body: JSON.stringify({
         stylistId: stylistId ?? undefined,
         serviceId: service.id,
-        tierId: sizeId,
+        tierId: null,
         clientName: clientName || "Waitlist guest",
         clientEmail: emailToUse,
         clientPhone,
@@ -159,13 +144,28 @@ export default function BookPage() {
     if (res.ok) setWaitlistJoined(true);
   }
 
-  function selectService(s: CatalogService) {
-    setService(s);
-    setSizeId(null);
-    setLengthId(null);
-    setAddonIds([]);
+  function selectGroup(g: CatalogGroup) {
+    setGroup(g);
+    setService(null);
+    setVariant(null);
     setDate(null);
     setStartTime(null);
+  }
+
+  function selectService(s: CatalogService | null) {
+    setService(s);
+    setVariant(null);
+    setDate(null);
+    setStartTime(null);
+  }
+
+  // Pick a variant and advance to date/time.
+  function bookVariant(s: CatalogService, v: CatalogVariant) {
+    setService(s);
+    setVariant(v);
+    setDate(null);
+    setStartTime(null);
+    setStep(1);
   }
 
   async function handlePhotoUpload(files: FileList | null) {
@@ -182,7 +182,7 @@ export default function BookPage() {
   }
 
   async function startCheckout() {
-    if (!service || !date || !startTime) return;
+    if (!service || !variant || !date || !startTime) return;
     setSubmitting(true);
     setHoldError(null);
     const intakeArr = [
@@ -197,8 +197,8 @@ export default function BookPage() {
       body: JSON.stringify({
         stylistId: stylistId ?? undefined,
         serviceId: service.id,
-        tierId: sizeId,
-        addonIds,
+        tierId: null,
+        variantId: variant?.id,
         date,
         startTime,
         clientName,
@@ -234,6 +234,19 @@ export default function BookPage() {
       <Shell>
         <div className="flex items-center justify-center py-32 text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading services…
+        </div>
+      </Shell>
+    );
+  }
+
+  if (!stylistId && stylists.length === 0) {
+    return (
+      <Shell>
+        <div className="mx-auto max-w-3xl px-4 py-10 text-center sm:py-14">
+          <h1 className="mb-2 text-2xl font-bold">Booking unavailable</h1>
+          <p className="text-muted-foreground">
+            No stylists are available for online booking right now. Please check back soon.
+          </p>
         </div>
       </Shell>
     );
@@ -295,77 +308,127 @@ export default function BookPage() {
         {step === 0 && (
           <div>
             {stylists.length > 1 && (
-              <button onClick={() => { setStylistId(null); setService(null); setDate(null); }} className="mb-3 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+              <button onClick={() => { setStylistId(null); setGroup(null); setService(null); setVariant(null); setDate(null); }} className="mb-3 inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
                 <ChevronLeft className="mr-1 h-4 w-4" /> Choose a different stylist
               </button>
             )}
             <h1 className="mb-1 text-2xl font-bold">Choose your style{catalog?.stylist ? ` with ${catalog.stylist.name}` : ""}</h1>
             <p className="mb-6 text-muted-foreground">Prices and times shown up front — no surprises.</p>
 
-            <div className="mb-6 flex flex-wrap gap-2">
-              {categories.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCategory(c === category ? null : c)}
-                  className={`rounded-full border px-4 py-1.5 text-sm font-medium ${category === c ? "border-brand-500 bg-brand-500 text-white" : "border-border hover:border-brand-300"}`}
+            {/* (a) 4 group tiles */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(catalog?.groups ?? []).map((g) => {
+                const selected = group?.id === g.id;
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => selectGroup(g)}
+                    className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition ${selected ? "border-brand-500 bg-brand-50 ring-2 ring-brand-100" : "border-border hover:border-brand-300"}`}
+                  >
+                    {g.image_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={g.image_url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                    )}
+                    <span className="text-sm font-semibold">{g.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* (b) service dropdown for the chosen group */}
+            {group && (
+              <div className="mt-6">
+                {group.description && <p className="mb-3 text-sm text-muted-foreground">{group.description}</p>}
+                <label className="mb-1 block text-sm font-medium">Choose a service</label>
+                <select
+                  value={service?.id ?? ""}
+                  onChange={(e) => selectService(group.services.find((s) => s.id === e.target.value) ?? null)}
+                  className="w-full rounded-lg border border-border bg-white p-2.5 text-sm"
                 >
-                  {c}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid gap-3">
-              {catalog!.services
-                .filter((s) => !category || s.category === category)
-                .map((s) => {
-                  const p = computePricing({ basePriceCents: s.base_price, taxRate: s.tax_rate, depositPercent: s.deposit_percent, requiresDeposit: s.requires_deposit, depositFlatCents: s.deposit_flat_cents });
-                  const selected = service?.id === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => selectService(s)}
-                      className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${selected ? "border-brand-500 ring-2 ring-brand-100" : "border-border hover:border-brand-300"}`}
-                    >
-                      {s.image_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg object-cover" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="font-semibold">{s.name}</span>
-                          <span className="whitespace-nowrap font-semibold text-brand-600">from {formatCents(p.serviceTotalCents)}</span>
-                        </div>
-                        <p className="line-clamp-1 text-sm text-muted-foreground">{s.description}</p>
-                        <span className="mt-1 inline-flex items-center text-xs text-muted-foreground"><Clock className="mr-1 h-3 w-3" />{formatDuration(s.duration_minutes)}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-            </div>
-
-            {service && (
-              <div className="mt-6 space-y-5 rounded-xl border border-border bg-muted/30 p-4">
-                {sizeTiers.length > 0 && (
-                  <TierGroup label="Size" required tiers={sizeTiers} value={sizeId} onChange={(v) => setSizeId(v as string | null)} single />
-                )}
-                {lengthTiers.length > 0 && (
-                  <TierGroup label="Length" tiers={lengthTiers} value={lengthId} onChange={(v) => setLengthId(v as string | null)} single />
-                )}
-                {addonTiers.length > 0 && (
-                  <TierGroup label="Add-ons" tiers={addonTiers} value={addonIds} onChange={(v) => setAddonIds(v as string[])} />
-                )}
-                {pricing && (
-                  <div className="flex items-center justify-between border-t border-border pt-3 text-sm">
-                    <span className="text-muted-foreground">Estimated total · {formatDuration(workMinutes)}</span>
-                    <span className="text-lg font-bold">{formatCents(pricing.serviceTotalCents)}</span>
-                  </div>
-                )}
+                  <option value="">Select a service…</option>
+                  {group.services.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
             )}
 
-            <Button className="mt-6 w-full bg-brand-500 hover:bg-brand-600" disabled={!canContinueService} onClick={() => setStep(1)}>
-              Continue
-            </Button>
+            {/* (c) variant list — or the custom panel */}
+            {service && !isCustom && (
+              <div className="mt-6">
+                {service.description && <p className="mb-3 text-sm text-muted-foreground">{service.description}</p>}
+                <h2 className="mb-3 font-semibold">Choose your option</h2>
+                <div className="grid gap-2">
+                  {service.variants?.length ? (
+                    service.variants.map((v) => (
+                      <div
+                        key={v.id}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-border p-4"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium">{v.label}</div>
+                          <div className="mt-0.5 inline-flex items-center text-xs text-muted-foreground">
+                            <Clock className="mr-1 h-3 w-3" />{formatDuration(v.duration_minutes)}
+                          </div>
+                          {v.price_from && (
+                            <p className="mt-1 text-xs text-muted-foreground">Final price confirmed at your appointment.</p>
+                          )}
+                        </div>
+                        <div className="flex flex-shrink-0 flex-col items-end gap-2">
+                          <span className="whitespace-nowrap font-semibold text-brand-600">
+                            {formatCents(v.price_cents)}{v.price_from ? "+" : ""}
+                          </span>
+                          <Button size="sm" className="bg-brand-500 hover:bg-brand-600" onClick={() => bookVariant(service, v)}>
+                            Book now
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">No options available for this service.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Custom group: require an inspiration photo, show the salon phone, then deposit-only checkout. */}
+            {service && isCustom && (
+              <div className="mt-6 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+                {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
+                <div className="flex items-center gap-2 rounded-lg bg-brand-50 p-3 text-sm text-brand-700">
+                  <Phone className="h-4 w-4 flex-shrink-0" />
+                  <span>Custom styles are priced individually — call us to confirm at <strong>{SALON_PHONE}</strong>. You&apos;ll pay a {formatCents(service.deposit_flat_cents ?? 5000)} deposit now to hold your spot.</span>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Inspiration photo <span className="text-brand-500">*</span></label>
+                  <p className="mb-2 text-xs text-muted-foreground">Upload at least one photo of the look you want so we can prep.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {photos.map((url) => (
+                      <div key={url} className="relative h-20 w-20">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={url} alt="inspiration" className="h-20 w-20 rounded-lg object-cover" />
+                        <button onClick={() => setPhotos((p) => p.filter((u) => u !== url))} className="absolute -right-1.5 -top-1.5 rounded-full bg-black/70 p-0.5 text-white"><X className="h-3 w-3" /></button>
+                      </div>
+                    ))}
+                    {photos.length < 6 && (
+                      <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground hover:border-brand-300">
+                        {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                        <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handlePhotoUpload(e.target.files)} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full bg-brand-500 hover:bg-brand-600"
+                  disabled={photos.length === 0 || !service.variants?.length}
+                  onClick={() => service.variants?.[0] && bookVariant(service, service.variants[0])}
+                >
+                  Book now
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -457,7 +520,7 @@ export default function BookPage() {
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <div className="font-semibold">{service.name}</div>
-                  <div className="text-sm text-muted-foreground">{selectedTiers.map((t) => t.name).join(" · ") || "Standard"}</div>
+                  <div className="text-sm text-muted-foreground">{variant?.label || "Standard"}</div>
                   <div className="mt-1 text-sm text-muted-foreground">{date && formatDateLabel(date)} · {startTime && formatTimeLabel(startTime)} · {formatDuration(workMinutes)}</div>
                 </div>
               </div>
@@ -564,43 +627,6 @@ function PaymentForm({ depositLabel, onPaid }: { depositLabel: string; onPaid: (
         {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing…</> : `Pay deposit ${depositLabel}`}
       </Button>
       <p className="flex items-center justify-center text-xs text-muted-foreground"><MapPin className="mr-1 h-3 w-3" />Secured by Stripe · test mode</p>
-    </div>
-  );
-}
-
-function TierGroup({
-  label,
-  tiers,
-  value,
-  onChange,
-  single,
-  required,
-}: {
-  label: string;
-  tiers: CatalogTier[];
-  value: string | string[] | null;
-  onChange: (v: string | string[] | null) => void;
-  single?: boolean;
-  required?: boolean;
-}) {
-  const selected = (id: string) => (single ? value === id : (value as string[])?.includes(id));
-  function toggle(id: string) {
-    if (single) onChange(value === id ? null : id);
-    else {
-      const arr = (value as string[]) ?? [];
-      onChange(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
-    }
-  }
-  return (
-    <div>
-      <div className="mb-2 text-sm font-medium">{label}{required && <span className="text-brand-500"> *</span>}</div>
-      <div className="flex flex-wrap gap-2">
-        {tiers.map((t) => (
-          <button key={t.id} onClick={() => toggle(t.id)} className={`rounded-lg border px-3 py-1.5 text-sm ${selected(t.id) ? "border-brand-500 bg-brand-50 text-brand-700" : "border-border hover:border-brand-300"}`}>
-            {t.name}{t.price_addon > 0 && <span className="text-muted-foreground"> +{formatCents(t.price_addon)}</span>}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

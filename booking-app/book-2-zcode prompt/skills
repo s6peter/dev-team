@@ -6,6 +6,71 @@ decisions, folds in research from the leading salon booking platforms (Fresha, B
 GlossGenius, Vagaro, Square Appointments, StyleSeat, Acuity, Mangomint), and corrects the
 architecture/security defects found in the first build.
 
+================================================================================
+## v3 — Grouped catalog + explicit variant pricing (CURRENT booking flow)
+================================================================================
+Supersedes the v1/v2 "style family → service → size/length add-on tiers" flow. The real
+QueenG price list (`business-info/services/*.pdf`, transcribed to `business-info/catalog.json`
+— 4 groups, 27 services, 233 variants) prices every style by an explicit **size × length**
+matrix whose deltas are NOT linear, so additive `service_tiers` cannot reproduce them. We move
+to **explicit per-variant absolute prices**.
+
+### Customer booking flow (exact)
+1. Click **Book** → **service groups page**: exactly **4 tiles** — *Adult Braids, Kids Braids,
+   Mens Braids, Custom Styles*.
+2. Select a group → **dropdown** to pick a service in that group (e.g. Box Braids, Knotless,
+   Boho Knotless…).
+3. → **list of bookable variants** for that service: each row = *size + length + price* (e.g.
+   "Box Braids — Small — Waist length — $280") with a **Book Now** button. "Starting at"
+   variants render "$60+" with a "final price confirmed at your appointment" note.
+4. Book Now → pick date/time (duration-aware) → **enter client info + intake** → **$50 deposit**
+   checkout → appointment **pending** (unchanged money/confirm logic).
+
+### Custom Styles group (kind = 'custom') — special flow
+Tree Braids, Fulani, Sew Ins, Natural Hair Twist, Take-downs, and a free-form "Describe your
+style". No fixed total: the client **pays the $50 deposit + tax, must upload an inspiration
+photo, and is shown the salon phone number to call**. `service_total = deposit` (balance 0);
+final price settled in person. Everything else (slot/hold/pending/confirm) is unchanged.
+
+### Data model (additions)
+- `service_groups (id, stylist_id, name, slug, kind text 'standard'|'custom', description,
+  image_url, sort_order, is_active)`. RLS: public read; owner writes via service-role admin API.
+- `services + group_id uuid references service_groups`. `base_price` becomes the "starting at"
+  reference; `category` retained for back-compat but `group_id` is authoritative.
+- `service_variants (id, service_id, stylist_id, size text null, length text null, label text,
+  price_cents int, price_from bool, duration_minutes int, sort_order, is_active)` — the bookable
+  rows. Replaces `service_tiers` for the new flow (old table kept, unused).
+- `slot_holds + service_variant_id`, `appointments + service_variant_id` (nullable; old
+  service_tier_id kept for the one legacy appointment).
+
+### Money (unchanged, now variant-based) — mirror in `lib/pricing.ts` AND `hold_slot()`
+- `serviceTotal = variant.price_cents` (custom group → `serviceTotal = deposit`).
+- `deposit = requires_deposit ? deposit_flat_cents($50) : 0`; `tax = round(deposit*tax_rate)`
+  (tax on deposit only); `chargedNow = deposit+tax`; `balance = serviceTotal − deposit`.
+- `hold_slot` gains `p_variant uuid`; duration = `variant.duration_minutes` (fallback service).
+
+### Admin (everything editable — REQUIRED)
+Owner/stylist can CRUD all three levels from the admin **Services** tab: **groups** (the 4
+tiles — name, kind, order, active), **services** within a group (name, group, description,
+duration, deposit toggle, active), and **variants** (size, length, label, price, "from" flag,
+duration, order, active) — including bulk price edits. All via authenticated admin APIs
+(`/api/admin/groups`, `/api/admin/services`, `/api/admin/variants`), never client-trusted,
+scoped by `stylist_id`.
+
+### Implementation contract (for the build agents)
+- **catalog.json** is the seed source of truth (already verified vs the PDF). Do NOT re-transcribe
+  prices; read them from that file.
+- **`GET /api/catalog?stylistId=`** returns `{ stylist, policy, openDays, groups: [{ id,name,slug,
+  kind,sort_order, services:[{ id,name,description,duration_minutes,requires_deposit, variants:[
+  { id,size,length,label,price_cents,price_from,duration_minutes }] }] }] }`.
+- **`GET /api/availability?...&variantId=&minutes=`** uses the variant's duration.
+- **`POST /api/bookings/hold`** body gains `variantId`; server derives price/duration from the
+  variant (never trust client money); custom group → deposit-only.
+- Seed generator `scripts/build-catalog.mjs` reads catalog.json → upserts groups/services/variants
+  for the owner, and emits the block into `supabase/seed.sql` (idempotent for `db reset`). On the
+  LIVE db, deactivate the 7 old owner sample services (don't hard-delete — one has a real appt).
+- Reuse the proven slot-hold → Stripe deposit → pending → confirm/decline pipeline unchanged.
+
 --------------------------------------------------------------------------------
 ## Locked decisions (unchanged intent, hardened)
 --------------------------------------------------------------------------------

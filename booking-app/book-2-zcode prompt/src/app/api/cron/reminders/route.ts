@@ -7,15 +7,15 @@ import {
   type ApptNotice,
 } from "@/lib/notifications";
 
-const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
-
 interface Row {
   id: string;
   date: string;
   start_time: string;
   balance_due_cents: number;
   manage_token: string | null;
+  stylist_id: string;
   service: { name: string } | null;
+  stylist: { name: string } | null;
   client: { name: string; email: string; phone: string | null } | null;
 }
 
@@ -28,10 +28,12 @@ const toNotice = (r: Row): ApptNotice => ({
   startTime: r.start_time,
   balanceCents: r.balance_due_cents,
   manageToken: r.manage_token,
+  stylistId: r.stylist_id,
+  stylistName: r.stylist?.name ?? null,
 });
 
 const SELECT =
-  "id,date,start_time,balance_due_cents,manage_token,service:services(name),client:clients(name,email,phone)";
+  "id,date,start_time,balance_due_cents,manage_token,stylist_id,service:services(name),stylist:stylists(name),client:clients(name,email,phone)";
 
 /**
  * Cron entrypoint (guarded by CRON_SECRET). Idempotent: each message type is

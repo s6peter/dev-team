@@ -118,13 +118,14 @@ async function sendReceivedNotice(appointmentId: string) {
   const { data: appt } = await supabase
     .from("appointments")
     .select(
-      "date,start_time,deposit_cents,balance_due_cents,manage_token,service:services(name),client:clients(name,email,phone)"
+      "date,start_time,deposit_cents,balance_due_cents,manage_token,stylist_id,service:services(name),stylist:stylists(name),client:clients(name,email,phone)"
     )
     .eq("id", appointmentId)
     .maybeSingle();
   if (!appt || !appt.client) return;
   const client = appt.client as unknown as { name: string; email: string; phone: string | null };
   const service = appt.service as unknown as { name: string } | null;
+  const stylist = appt.stylist as unknown as { name: string } | null;
   await notifyBookingReceived({
     clientName: client.name,
     clientEmail: client.email,
@@ -135,5 +136,7 @@ async function sendReceivedNotice(appointmentId: string) {
     depositCents: appt.deposit_cents,
     balanceCents: appt.balance_due_cents,
     manageToken: appt.manage_token,
+    stylistId: appt.stylist_id,
+    stylistName: stylist?.name ?? null,
   }).catch((e) => console.error("notify failed", e));
 }
