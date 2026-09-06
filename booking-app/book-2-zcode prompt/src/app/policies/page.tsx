@@ -22,13 +22,14 @@ export default async function PoliciesPage() {
   const late = formatCents(p?.late_fee_cents ?? 2000);
   const grace = p?.grace_minutes ?? 10;
   const cancelHrs = p?.cancel_notice_hours ?? 24;
+  const deposit = formatCents(p?.deposit_cents ?? 5000);
 
   const sections = [
     {
       icon: <CreditCard className="h-5 w-5" />,
       title: "Booking & deposit",
       items: [
-        "A $50 non-refundable deposit is required to book, and is applied toward your service.",
+        `A ${deposit} non-refundable deposit is required to book, and is applied toward your service.`,
         "The remaining balance is due after service. Taxes are charged on the deposit only — not the full price.",
       ],
     },
@@ -81,7 +82,7 @@ export default async function PoliciesPage() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-50 to-background">
       <Header />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12">
         <div className="mb-8 text-center">

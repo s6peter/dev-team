@@ -21,7 +21,7 @@ export default async function ManagePage({ params }: { params: { token: string }
   const minutes = timeToMinutes(appt.end_time) - timeToMinutes(appt.start_time);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-50 to-background">
       <Header />
       <main className="mx-auto w-full max-w-lg flex-1 px-4 py-12">
         <ManageClient

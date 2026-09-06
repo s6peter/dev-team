@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   Sparkles,
   Star,
@@ -12,10 +13,12 @@ import {
   Phone,
   Mail,
   Navigation,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { Slideshow } from "@/components/Slideshow";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { computePricing, formatCents } from "@/lib/pricing";
 import { formatDuration } from "@/lib/utils";
@@ -105,7 +108,7 @@ function Stars({
 export default async function HomePage() {
   const supabase = createSupabaseServerClient();
 
-  const [servicesRes, reviewsRes] = await Promise.all([
+  const [servicesRes, reviewsRes, portfolioRes] = await Promise.all([
     supabase
       .from("services")
       .select(
@@ -121,6 +124,12 @@ export default async function HomePage() {
       .eq("is_published", true)
       .order("created_at", { ascending: false })
       .limit(4),
+    supabase
+      .from("portfolio_items")
+      .select("id,title,image_url")
+      .eq("stylist_id", STYLIST_ID)
+      .order("sort_order", { ascending: true })
+      .limit(8),
   ]);
 
   const services: ServiceCard[] = (servicesRes.data ?? []).map((s) => ({
@@ -147,18 +156,91 @@ export default async function HomePage() {
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
       : 0;
 
-  const heroImage = services.find((s) => s.image_url)?.image_url ?? null;
+  // Work-sample slides from the owner's portfolio; fall back to service
+  // images and finally to a few stock shots so the slideshow never renders empty.
+  const portfolioSlides = (portfolioRes.data ?? [])
+    .filter((p) => p.image_url && p.image_url.trim().length > 0)
+    .map((p) => ({
+      src: p.image_url,
+      alt: p.title || `Braiding work by ${SITE.shortName}`,
+    }));
+
+  const serviceSlides = services
+    .filter((s) => s.image_url)
+    .map((s) => ({ src: s.image_url as string, alt: s.name }));
+
+  const fallbackSlides = [
+    {
+      src: "https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&w=1200&q=80",
+      alt: "Protective braided style",
+    },
+    {
+      src: "https://images.unsplash.com/photo-1522337660859-02fbefca4702?auto=format&fit=crop&w=1200&q=80",
+      alt: "Fresh braids styling",
+    },
+    {
+      src: "https://images.unsplash.com/photo-1595959183082-7b570b7e08e2?auto=format&fit=crop&w=1200&q=80",
+      alt: "Braiding salon work sample",
+    },
+  ];
+
+  const slides =
+    portfolioSlides.length > 0
+      ? portfolioSlides
+      : serviceSlides.length > 0
+      ? serviceSlides
+      : fallbackSlides;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-brand-50 to-background">
       <Header />
 
       <main className="flex-1">
         {/* Hero */}
         <section className="relative overflow-hidden bg-gradient-to-b from-brand-50 to-background">
-          <div className="mx-auto flex max-w-7xl flex-col gap-12 px-6 py-16 sm:py-24 lg:flex-row lg:items-center lg:gap-16 lg:px-8 lg:py-28">
+          {/* Decorative blush glow */}
+          <div
+            className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-200/40 blur-3xl"
+            aria-hidden="true"
+          />
+          <div className="relative mx-auto max-w-7xl px-6 pt-6 lg:px-8">
+            {/* Shop accessories — top-left entry */}
+            <Link
+              href="/shop"
+              className="group inline-flex items-center gap-3 rounded-2xl border border-brand-200 bg-white/80 px-4 py-2.5 shadow-sm backdrop-blur transition hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
+                <ShoppingBag className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="text-left">
+                <span className="block text-sm font-semibold text-foreground">
+                  Shop accessories
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Edges, oils & essentials
+                </span>
+              </span>
+              <ArrowRight
+                className="h-4 w-4 text-brand-500 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
+
+          <div className="relative mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 pb-16 pt-10 sm:pb-24 lg:flex-row lg:items-center lg:gap-16 lg:px-8 lg:pb-28">
             <div className="mx-auto max-w-2xl text-center lg:mx-0 lg:flex-1 lg:text-left">
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-100/60 px-4 py-1.5 text-sm font-medium text-brand-600">
+              {/* Logo */}
+              <div className="flex justify-center lg:justify-start">
+                <Image
+                  src="/logo.png"
+                  alt="QueenG Braids & Essentials logo"
+                  width={160}
+                  height={160}
+                  priority
+                  className="h-32 w-32 rounded-full object-cover shadow-xl ring-4 ring-white sm:h-40 sm:w-40"
+                />
+              </div>
+              <span className="mt-6 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-100/60 px-4 py-1.5 text-sm font-medium text-brand-600">
                 <Sparkles className="h-4 w-4" aria-hidden="true" />
                 {SITE.tagline}
               </span>
@@ -202,18 +284,9 @@ export default async function HomePage() {
               )}
             </div>
 
-            <div className="mx-auto w-full max-w-md lg:mx-0 lg:flex-1">
-              {heroImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={heroImage}
-                  alt={`Protective braiding style by ${SITE.shortName}`}
-                  className="aspect-[4/5] w-full rounded-3xl object-cover shadow-2xl ring-1 ring-black/5"
-                  loading="eager"
-                />
-              ) : (
-                <div className="aspect-[4/5] w-full rounded-3xl bg-gradient-to-br from-brand-200 via-brand-100 to-brand-50 shadow-2xl ring-1 ring-black/5" />
-              )}
+            {/* Work-sample slideshow */}
+            <div className="mx-auto w-full max-w-xl lg:mx-0 lg:flex-1">
+              <Slideshow slides={slides} />
             </div>
           </div>
         </section>

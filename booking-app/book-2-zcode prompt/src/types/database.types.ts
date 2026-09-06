@@ -58,8 +58,8 @@ export type Database = {
           review_request_sent_at: string | null
           service_id: string
           service_tier_id: string | null
-          service_variant_id: string | null
           service_total_cents: number
+          service_variant_id: string | null
           start_time: string
           status: string
           stripe_payment_method_id: string | null
@@ -91,8 +91,8 @@ export type Database = {
           review_request_sent_at?: string | null
           service_id: string
           service_tier_id?: string | null
-          service_variant_id?: string | null
           service_total_cents?: number
+          service_variant_id?: string | null
           start_time: string
           status?: string
           stripe_payment_method_id?: string | null
@@ -124,8 +124,8 @@ export type Database = {
           review_request_sent_at?: string | null
           service_id?: string
           service_tier_id?: string | null
-          service_variant_id?: string | null
           service_total_cents?: number
+          service_variant_id?: string | null
           start_time?: string
           status?: string
           stripe_payment_method_id?: string | null
@@ -256,6 +256,7 @@ export type Database = {
         Row: {
           blow_dry_fee_cents: number
           cancel_notice_hours: number
+          deposit_cents: number
           grace_minutes: number
           late_cancel_fee_percent: number
           late_fee_cents: number
@@ -268,6 +269,7 @@ export type Database = {
         Insert: {
           blow_dry_fee_cents?: number
           cancel_notice_hours?: number
+          deposit_cents?: number
           grace_minutes?: number
           late_cancel_fee_percent?: number
           late_fee_cents?: number
@@ -280,6 +282,7 @@ export type Database = {
         Update: {
           blow_dry_fee_cents?: number
           cancel_notice_hours?: number
+          deposit_cents?: number
           grace_minutes?: number
           late_cancel_fee_percent?: number
           late_fee_cents?: number
@@ -507,6 +510,71 @@ export type Database = {
           },
         ]
       }
+      payouts: {
+        Row: {
+          appointment_count: number
+          commission_cents: number
+          commission_rate: number
+          created_at: string | null
+          gross_cents: number
+          id: string
+          method: string | null
+          net_cents: number
+          note: string | null
+          paid_at: string | null
+          period_end: string
+          period_start: string
+          status: string
+          stripe_transfer_id: string | null
+          stylist_id: string
+          withholding_cents: number
+        }
+        Insert: {
+          appointment_count?: number
+          commission_cents?: number
+          commission_rate: number
+          created_at?: string | null
+          gross_cents?: number
+          id?: string
+          method?: string | null
+          net_cents?: number
+          note?: string | null
+          paid_at?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          stripe_transfer_id?: string | null
+          stylist_id: string
+          withholding_cents?: number
+        }
+        Update: {
+          appointment_count?: number
+          commission_cents?: number
+          commission_rate?: number
+          created_at?: string | null
+          gross_cents?: number
+          id?: string
+          method?: string | null
+          net_cents?: number
+          note?: string | null
+          paid_at?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          stripe_transfer_id?: string | null
+          stylist_id?: string
+          withholding_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payouts_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portfolio_items: {
         Row: {
           created_at: string | null
@@ -565,6 +633,106 @@ export type Database = {
           processed_at?: string | null
         }
         Relationships: []
+      }
+      product_orders: {
+        Row: {
+          created_at: string | null
+          customer_email: string
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          items: Json
+          paid_at: string | null
+          status: string
+          stripe_payment_intent_id: string | null
+          stylist_id: string
+          subtotal_cents: number
+        }
+        Insert: {
+          created_at?: string | null
+          customer_email: string
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          items?: Json
+          paid_at?: string | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stylist_id: string
+          subtotal_cents?: number
+        }
+        Update: {
+          created_at?: string | null
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          items?: Json
+          paid_at?: string | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stylist_id?: string
+          subtotal_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_orders_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stock: number | null
+          stylist_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name: string
+          price_cents?: number
+          sort_order?: number
+          stock?: number | null
+          stylist_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          stock?: number | null
+          stylist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reviews: {
         Row: {
@@ -706,6 +874,47 @@ export type Database = {
           },
         ]
       }
+      service_tiers: {
+        Row: {
+          description: string | null
+          duration_addon: number
+          id: string
+          kind: string
+          name: string
+          price_addon: number
+          service_id: string
+          sort_order: number
+        }
+        Insert: {
+          description?: string | null
+          duration_addon?: number
+          id?: string
+          kind?: string
+          name: string
+          price_addon?: number
+          service_id: string
+          sort_order?: number
+        }
+        Update: {
+          description?: string | null
+          duration_addon?: number
+          id?: string
+          kind?: string
+          name?: string
+          price_addon?: number
+          service_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_tiers_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_variants: {
         Row: {
           created_at: string | null
@@ -762,47 +971,6 @@ export type Database = {
             columns: ["stylist_id"]
             isOneToOne: false
             referencedRelation: "stylists"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      service_tiers: {
-        Row: {
-          description: string | null
-          duration_addon: number
-          id: string
-          kind: string
-          name: string
-          price_addon: number
-          service_id: string
-          sort_order: number
-        }
-        Insert: {
-          description?: string | null
-          duration_addon?: number
-          id?: string
-          kind?: string
-          name: string
-          price_addon?: number
-          service_id: string
-          sort_order?: number
-        }
-        Update: {
-          description?: string | null
-          duration_addon?: number
-          id?: string
-          kind?: string
-          name?: string
-          price_addon?: number
-          service_id?: string
-          sort_order?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "service_tiers_service_id_fkey"
-            columns: ["service_id"]
-            isOneToOne: false
-            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]
@@ -909,8 +1077,8 @@ export type Database = {
           policy_consented: boolean
           service_id: string
           service_tier_id: string | null
-          service_variant_id: string | null
           service_total_cents: number
+          service_variant_id: string | null
           start_time: string
           stripe_payment_intent_id: string | null
           stylist_id: string
@@ -934,8 +1102,8 @@ export type Database = {
           policy_consented?: boolean
           service_id: string
           service_tier_id?: string | null
-          service_variant_id?: string | null
           service_total_cents?: number
+          service_variant_id?: string | null
           start_time: string
           stripe_payment_intent_id?: string | null
           stylist_id: string
@@ -959,8 +1127,8 @@ export type Database = {
           policy_consented?: boolean
           service_id?: string
           service_tier_id?: string | null
-          service_variant_id?: string | null
           service_total_cents?: number
+          service_variant_id?: string | null
           start_time?: string
           stripe_payment_intent_id?: string | null
           stylist_id?: string
@@ -1003,42 +1171,125 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           calendar_feed_token: string
+          commission_rate: number
           created_at: string | null
           email: string
           id: string
           instagram: string | null
+          is_active: boolean
           is_owner: boolean
+          is_w2: boolean
+          must_change_password: boolean
           name: string
+          payouts_enabled: boolean
           phone: string | null
+          stripe_account_id: string | null
+          tax_withholding_rate: number
           user_id: string | null
+          workplace_lat: number | null
+          workplace_lng: number | null
+          workplace_radius_m: number
         }
         Insert: {
           avatar_url?: string | null
           bio?: string | null
           calendar_feed_token?: string
+          commission_rate?: number
           created_at?: string | null
           email: string
           id?: string
           instagram?: string | null
+          is_active?: boolean
           is_owner?: boolean
+          is_w2?: boolean
+          must_change_password?: boolean
           name: string
+          payouts_enabled?: boolean
           phone?: string | null
+          stripe_account_id?: string | null
+          tax_withholding_rate?: number
           user_id?: string | null
+          workplace_lat?: number | null
+          workplace_lng?: number | null
+          workplace_radius_m?: number
         }
         Update: {
           avatar_url?: string | null
           bio?: string | null
           calendar_feed_token?: string
+          commission_rate?: number
           created_at?: string | null
           email?: string
           id?: string
           instagram?: string | null
+          is_active?: boolean
           is_owner?: boolean
+          is_w2?: boolean
+          must_change_password?: boolean
           name?: string
+          payouts_enabled?: boolean
           phone?: string | null
+          stripe_account_id?: string | null
+          tax_withholding_rate?: number
           user_id?: string | null
+          workplace_lat?: number | null
+          workplace_lng?: number | null
+          workplace_radius_m?: number
         }
         Relationships: []
+      }
+      time_entries: {
+        Row: {
+          clock_in: string
+          clock_in_lat: number | null
+          clock_in_lng: number | null
+          clock_out: string | null
+          clock_out_lat: number | null
+          clock_out_lng: number | null
+          created_at: string | null
+          id: string
+          note: string | null
+          source: string
+          stylist_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          clock_in?: string
+          clock_in_lat?: number | null
+          clock_in_lng?: number | null
+          clock_out?: string | null
+          clock_out_lat?: number | null
+          clock_out_lng?: number | null
+          created_at?: string | null
+          id?: string
+          note?: string | null
+          source?: string
+          stylist_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          clock_in?: string
+          clock_in_lat?: number | null
+          clock_in_lng?: number | null
+          clock_out?: string | null
+          clock_out_lat?: number | null
+          clock_out_lng?: number | null
+          created_at?: string | null
+          id?: string
+          note?: string | null
+          source?: string
+          stylist_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_stylist_id_fkey"
+            columns: ["stylist_id"]
+            isOneToOne: false
+            referencedRelation: "stylists"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       waitlist_entries: {
         Row: {
@@ -1113,6 +1364,7 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_holds: { Args: never; Returns: number }
+      clone_catalog: { Args: { p_from: string; p_to: string }; Returns: number }
       confirm_booking_from_hold: {
         Args: { p_hold_id: string; p_payment_intent: string }
         Returns: string
@@ -1132,8 +1384,8 @@ export type Database = {
           p_start: string
           p_stylist: string
           p_tier: string
-          p_variant: string
           p_ttl_minutes: number
+          p_variant: string
         }
         Returns: {
           balance_due_cents: number
@@ -1152,8 +1404,8 @@ export type Database = {
           policy_consented: boolean
           service_id: string
           service_tier_id: string | null
-          service_variant_id: string | null
           service_total_cents: number
+          service_variant_id: string | null
           start_time: string
           stripe_payment_intent_id: string | null
           stylist_id: string

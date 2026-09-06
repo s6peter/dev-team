@@ -25,8 +25,8 @@ const FLEX_LABEL: Record<WaitlistEntry["flexibility"], string> = {
   any: "Any date",
 };
 const STATUS_STYLE: Record<string, string> = {
-  waiting: "bg-amber-100 text-amber-700",
-  notified: "bg-blue-100 text-blue-700",
+  waiting: "bg-brand-100 text-brand-700",
+  notified: "bg-brand-50 text-brand-600",
   booked: "bg-green-100 text-green-700",
   expired: "bg-gray-100 text-gray-600",
   cancelled: "bg-gray-100 text-gray-600",

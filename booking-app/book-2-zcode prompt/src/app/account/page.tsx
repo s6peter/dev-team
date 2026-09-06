@@ -45,7 +45,7 @@ export default async function AccountPage() {
   }));
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-50 to-background">
       <Header />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
         <AccountClient email={user.email ?? ""} appointments={appointments} />

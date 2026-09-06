@@ -91,7 +91,8 @@ begin
   select * into v_grp from service_groups where id = v_svc.group_id;
 
   if p_variant is not null then
-    select * into v_variant from service_variants where id = p_variant and service_id = p_service;
+    select * into v_variant from service_variants where id = p_variant and service_id = p_service and is_active;
+    if not found then raise exception 'variant_not_found'; end if;
   end if;
 
   v_minutes := coalesce(v_variant.duration_minutes, v_svc.duration_minutes);

@@ -17,21 +17,21 @@ export const dynamic = "force-dynamic";
 const STYLIST_ID = process.env.NEXT_PUBLIC_STYLIST_ID!;
 
 /** Fetch the owner's grouped catalog (4 tiles → services → priced variants). */
-async function loadGroups(): Promise<CatalogGroup[]> {
+async function loadCatalog(): Promise<{ groups: CatalogGroup[]; depositCents: number }> {
   try {
     const res = await fetch(`${SITE.url}/api/catalog?stylistId=${STYLIST_ID}`, {
       cache: "no-store",
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { groups: [], depositCents: 5000 };
     const data = await res.json();
-    return (data.groups ?? []) as CatalogGroup[];
+    return { groups: (data.groups ?? []) as CatalogGroup[], depositCents: data.policy?.deposit_cents ?? 5000 };
   } catch {
-    return [];
+    return { groups: [], depositCents: 5000 };
   }
 }
 
 export default async function ServicesPage() {
-  const groups = await loadGroups();
+  const { groups, depositCents } = await loadCatalog();
 
   return (
     <div className="flex min-h-screen flex-col bg-luxury-black">
@@ -59,8 +59,8 @@ export default async function ServicesPage() {
             <div className="mx-auto mt-8 flex max-w-xl items-start gap-3 rounded-2xl border border-brand-500/20 bg-brand-500/5 p-4 text-left">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" aria-hidden="true" />
               <p className="text-sm leading-relaxed text-white/70">
-                A $50 deposit locks in your appointment. It is applied toward your service total, and
-                the remaining balance is paid in person on the day of your visit.
+                A ${Math.round(depositCents / 100)} deposit locks in your appointment. It is applied toward your
+                service total, and the remaining balance is paid in person on the day of your visit.
               </p>
             </div>
           </div>

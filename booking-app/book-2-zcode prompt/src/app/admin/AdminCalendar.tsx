@@ -222,9 +222,9 @@ interface StatusMeta {
 }
 
 const STATUS_META: Record<string, StatusMeta> = {
-  pending: { block: "border-l-amber-400 bg-amber-50 text-amber-900", pill: "bg-amber-100 text-amber-700", label: "Pending" },
+  pending: { block: "border-l-brand-300 bg-brand-50 text-brand-900", pill: "bg-brand-50 text-brand-600", label: "Pending" },
   confirmed: { block: "border-l-brand-500 bg-brand-50 text-brand-900", pill: "bg-brand-100 text-brand-700", label: "Confirmed" },
-  completed: { block: "border-l-blue-400 bg-blue-50 text-blue-900", pill: "bg-blue-100 text-blue-700", label: "Completed" },
+  completed: { block: "border-l-brand-600 bg-brand-100 text-brand-900", pill: "bg-brand-200 text-brand-800", label: "Completed" },
   cancelled: { block: "border-l-gray-400 bg-gray-100 text-gray-500", pill: "bg-gray-200 text-gray-600", label: "Cancelled" },
   declined: { block: "border-l-gray-400 bg-gray-100 text-gray-500", pill: "bg-gray-200 text-gray-600", label: "Declined" },
   no_show: { block: "border-l-red-400 bg-red-50 text-red-900", pill: "bg-red-100 text-red-700", label: "No-show" },
@@ -424,7 +424,7 @@ function availabilityForDate(date: string, availability: AvailabilityResponse): 
 /* Main component                                                     */
 /* ------------------------------------------------------------------ */
 
-export function AdminCalendar() {
+export function AdminCalendar({ canSeeMoney = true }: { canSeeMoney?: boolean }) {
   const [selectedDate, setSelectedDate] = useState<string>(() => nowInSalonTz().dateStr);
   const [viewMode, setViewMode] = useState<ViewMode>("day");
 
@@ -560,6 +560,7 @@ export function AdminCalendar() {
   }
 
   function openNewAppt(time: string): void {
+    if (!canSeeMoney) return; // stylists don't create walk-ins (form shows prices)
     setFormError(null);
     setCreateInfo(null);
     setNewAppt({ date: selectedDate, time });
@@ -567,6 +568,7 @@ export function AdminCalendar() {
 
   /** Empty-slot click on any column → open the New appointment modal for that day+time. */
   function handleColumnClick(date: string, e: MouseEvent<HTMLDivElement>): void {
+    if (!canSeeMoney) return; // stylists can't create appointments
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     const abs = DAY_START_MIN + y / PX_PER_MIN;
@@ -715,6 +717,7 @@ export function AdminCalendar() {
   /* ------------------------------- render ------------------------------- */
 
   const columnProps = {
+    canSeeMoney,
     now,
     todayStr,
     moveBusyId,
@@ -808,10 +811,12 @@ export function AdminCalendar() {
             className={INPUT_CLASS + " h-9 w-auto"}
             aria-label="Jump to date"
           />
-          <Button className="bg-brand-500 hover:bg-brand-600" onClick={() => openNewAppt(defaultNewTime())}>
-            <Plus className="mr-1 h-4 w-4" />
-            New appointment
-          </Button>
+          {canSeeMoney && (
+            <Button className="bg-brand-500 hover:bg-brand-600" onClick={() => openNewAppt(defaultNewTime())}>
+              <Plus className="mr-1 h-4 w-4" />
+              New appointment
+            </Button>
+          )}
         </div>
       </div>
 
@@ -887,7 +892,7 @@ export function AdminCalendar() {
       )}
 
       {viewMode === "day" && dayAvail.closed && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-800">
           <Ban className="h-4 w-4 shrink-0" />
           <span>
             <span className="font-medium">Closed</span> · {dayAvail.closedReason}
@@ -974,7 +979,7 @@ export function AdminCalendar() {
 
       {!loading && viewMode === "day" && dayAppointments.length === 0 && !dayAvail.closed && (
         <p className="text-center text-sm text-muted-foreground">
-          No appointments on {formatDateLabel(selectedDate)}. Click any time slot to add one.
+          No appointments on {formatDateLabel(selectedDate)}.{canSeeMoney ? " Click any time slot to add one." : ""}
         </p>
       )}
 
@@ -982,6 +987,7 @@ export function AdminCalendar() {
       {selectedAppt && (
         <AppointmentDetail
           appt={selectedAppt}
+          canSeeMoney={canSeeMoney}
           onClose={() => {
             setSelectedApptId(null);
             setPanelError(null);
@@ -1049,9 +1055,11 @@ interface DayColumnProps {
   onBlockDragEnd: () => void;
   onColumnDragOver: (date: string, e: DragEvent<HTMLDivElement>) => void;
   onColumnDrop: (date: string, e: DragEvent<HTMLDivElement>) => void;
+  canSeeMoney: boolean;
 }
 
 function DayColumn({
+  canSeeMoney,
   date,
   appts,
   avail,
@@ -1176,7 +1184,7 @@ function DayColumn({
             key={appt.id}
             role="button"
             tabIndex={0}
-            draggable
+            draggable={canSeeMoney}
             aria-label={`${clientName}, ${serviceName}, ${timeText}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -1337,6 +1345,7 @@ function MonthView({ gridDays, monthStr, apptsByDate, todayStr, onSelectDay, onS
 
 interface AppointmentDetailProps {
   appt: Appointment;
+  canSeeMoney: boolean;
   onClose: () => void;
   onAction: (action: ApptAction) => Promise<void>;
   onReschedule: (date: string, startTime: string) => Promise<void>;
@@ -1347,6 +1356,7 @@ interface AppointmentDetailProps {
 
 function AppointmentDetail({
   appt,
+  canSeeMoney,
   onClose,
   onAction,
   onReschedule,
@@ -1369,10 +1379,10 @@ function AppointmentDetail({
   }, [appt.id, appt.date, appt.start_time]);
 
   const meta = statusMeta(appt.status);
-  const actions = STATUS_ACTIONS[appt.status] ?? [];
+  const actions = canSeeMoney ? (STATUS_ACTIONS[appt.status] ?? []) : [];
   const busy = busyAction !== null || rescheduling;
-  const canCharge = FEE_STATUSES.has(appt.status);
-  const canChargeBalance = appt.status === "confirmed" || appt.status === "completed";
+  const canCharge = canSeeMoney && FEE_STATUSES.has(appt.status);
+  const canChargeBalance = canSeeMoney && (appt.status === "confirmed" || appt.status === "completed");
 
   return (
     <div
@@ -1416,7 +1426,7 @@ function AppointmentDetail({
             <User className="h-4 w-4 shrink-0 text-muted-foreground" />
             {appt.client?.name ?? "Client"}
           </div>
-          {appt.client?.email && (
+          {canSeeMoney && appt.client?.email && (
             <div className="mt-1 flex items-center gap-2 text-muted-foreground">
               <Mail className="h-4 w-4 shrink-0" />
               <a className="truncate hover:underline" href={`mailto:${appt.client.email}`}>
@@ -1424,7 +1434,7 @@ function AppointmentDetail({
               </a>
             </div>
           )}
-          {appt.client?.phone && (
+          {canSeeMoney && appt.client?.phone && (
             <div className="mt-1 flex items-center gap-2 text-muted-foreground">
               <Phone className="h-4 w-4 shrink-0" />
               <a className="hover:underline" href={`tel:${appt.client.phone}`}>
@@ -1434,16 +1444,18 @@ function AppointmentDetail({
           )}
         </div>
 
-        <div className="mt-3 flex justify-between rounded-xl border border-border p-3 text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">Deposit</div>
-            <div className="font-semibold">{formatCents(appt.deposit_cents)}</div>
+        {canSeeMoney && (
+          <div className="mt-3 flex justify-between rounded-xl border border-border p-3 text-sm">
+            <div>
+              <div className="text-xs text-muted-foreground">Deposit</div>
+              <div className="font-semibold">{formatCents(appt.deposit_cents)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">Balance due</div>
+              <div className="font-semibold">{formatCents(appt.balance_due_cents)}</div>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="text-xs text-muted-foreground">Balance due</div>
-            <div className="font-semibold">{formatCents(appt.balance_due_cents)}</div>
-          </div>
-        </div>
+        )}
 
         {appt.notes && (
           <p className="mt-3 rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -1506,7 +1518,8 @@ function AppointmentDetail({
           </div>
         )}
 
-        {/* Reschedule */}
+        {/* Reschedule (owner only — stylists can't reschedule) */}
+        {canSeeMoney && (
         <div className="mt-4 border-t border-border pt-4">
           {!reschedOpen ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={() => setReschedOpen(true)}>
@@ -1543,6 +1556,7 @@ function AppointmentDetail({
             </form>
           )}
         </div>
+        )}
       </div>
     </div>
   );
@@ -2008,7 +2022,7 @@ function NewAppointmentModal({
           </div>
 
           {services.length === 0 && (
-            <p className="text-sm text-amber-700 sm:col-span-2">
+            <p className="text-sm text-brand-700 sm:col-span-2">
               No services found. Add a service before booking.
             </p>
           )}

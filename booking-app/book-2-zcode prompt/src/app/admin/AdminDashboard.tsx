@@ -14,9 +14,14 @@ import { AdminClients } from "./AdminClients";
 import { AdminAnalytics } from "./AdminAnalytics";
 import { AdminSettings } from "./AdminSettings";
 import { AdminPortfolio } from "./AdminPortfolio";
+import { AdminProducts } from "./AdminProducts";
 import { AdminWaitlist } from "./AdminWaitlist";
 import { AdminMessages } from "./AdminMessages";
 import { AdminStaff } from "./AdminStaff";
+import { AdminEarnings } from "./AdminEarnings";
+import { AdminPayouts } from "./AdminPayouts";
+import { AdminTimesheets } from "./AdminTimesheets";
+import { ClockWidget } from "./ClockWidget";
 
 interface Appt {
   id: string;
@@ -53,7 +58,7 @@ const ACTIONS: Record<string, { action: string; label: string }[]> = {
   declined: [{ action: "revert", label: "Revert" }],
 };
 
-type AdminTab = "calendar" | "appointments" | "clients" | "waitlist" | "analytics" | "services" | "portfolio" | "schedule" | "messages" | "staff" | "settings" | "reviews";
+type AdminTab = "calendar" | "appointments" | "clients" | "waitlist" | "analytics" | "services" | "portfolio" | "shop" | "schedule" | "messages" | "staff" | "settings" | "reviews" | "earnings" | "payouts" | "timesheets";
 
 export function AdminDashboard({ stylistName, isOwner }: { stylistName: string; isOwner: boolean }) {
   const router = useRouter();
@@ -122,11 +127,14 @@ export function AdminDashboard({ stylistName, isOwner }: { stylistName: string; 
         <Stat icon={<CalendarClock className="h-4 w-4" />} label="Pending" value={String(stats.pending)} accent />
         <Stat icon={<Check className="h-4 w-4" />} label="Confirmed" value={String(stats.confirmed)} />
         <Stat icon={<Users className="h-4 w-4" />} label="Today" value={String(stats.today)} />
-        <Stat icon={<DollarSign className="h-4 w-4" />} label="Deposits collected" value={formatCents(stats.deposits)} />
+        {isOwner && <Stat icon={<DollarSign className="h-4 w-4" />} label="Deposits collected" value={formatCents(stats.deposits)} />}
       </div>
 
       <div className="mb-4 flex gap-2 overflow-x-auto border-b border-border">
-        {(["calendar", "appointments", "clients", "waitlist", "analytics", "services", "portfolio", "schedule", "messages", ...(isOwner ? (["staff"] as const) : []), "settings", "reviews"] as AdminTab[]).map((t) => (
+        {(isOwner
+          ? (["calendar", "appointments", "clients", "waitlist", "analytics", "services", "portfolio", "shop", "schedule", "messages", "staff", "earnings", "payouts", "timesheets", "settings", "reviews"] as AdminTab[])
+          : (["calendar", "earnings"] as AdminTab[])
+        ).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium capitalize ${tab === t ? "border-brand-500 text-brand-600" : "border-transparent text-muted-foreground"}`}>{t}</button>
         ))}
       </div>
@@ -189,16 +197,25 @@ export function AdminDashboard({ stylistName, isOwner }: { stylistName: string; 
         </>
       )}
 
-      {tab === "calendar" && <AdminCalendar />}
+      {tab === "calendar" && (
+        <div className="space-y-4">
+          <ClockWidget />
+          <AdminCalendar canSeeMoney={isOwner} />
+        </div>
+      )}
       {tab === "clients" && <AdminClients />}
       {tab === "waitlist" && <AdminWaitlist />}
       {tab === "portfolio" && <AdminPortfolio />}
+      {tab === "shop" && isOwner && <AdminProducts />}
       {tab === "messages" && <AdminMessages />}
       {tab === "staff" && <AdminStaff />}
       {tab === "analytics" && <AdminAnalytics />}
       {tab === "settings" && <AdminSettings />}
       {tab === "schedule" && <AdminSchedule />}
       {tab === "services" && <AdminServices />}
+      {tab === "earnings" && <AdminEarnings />}
+      {tab === "payouts" && isOwner && <AdminPayouts />}
+      {tab === "timesheets" && isOwner && <AdminTimesheets />}
 
       {tab === "reviews" && <ReviewsPanel reviews={reviews} onChange={() => fetch("/api/admin/reviews").then((r) => r.json()).then((d) => setReviews(d.reviews ?? []))} />}
     </div>
@@ -227,9 +244,9 @@ function ReviewsPanel({ reviews, onChange }: { reviews: Review[]; onChange: () =
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="font-semibold">{r.author_name || "Client"}</span>
-              <span className="flex">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={`h-4 w-4 ${i < r.rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />)}</span>
+              <span className="flex">{Array.from({ length: 5 }).map((_, i) => <Star key={i} className={`h-4 w-4 ${i < r.rating ? "fill-brand-500 text-brand-500" : "text-gray-300"}`} />)}</span>
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${r.is_published ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{r.is_published ? "Published" : "Pending"}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs ${r.is_published ? "bg-green-100 text-green-700" : "bg-brand-100 text-brand-700"}`}>{r.is_published ? "Published" : "Pending"}</span>
           </div>
           {r.comment && <p className="mt-2 text-sm text-muted-foreground">{r.comment}</p>}
           <div className="mt-3 flex gap-2">

@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, X, Scissors, CalendarDays } from "lucide-react";
+import { Menu, X, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Home", href: "/" },
   { name: "Services", href: "/services" },
+  { name: "Shop", href: "/shop" },
   { name: "Portfolio", href: "/portfolio" },
   { name: "About", href: "/about" },
   { name: "Contact", href: "/contact" },
@@ -41,7 +43,14 @@ export function Header() {
       <nav className="mx-auto flex max-w-7xl items-center justify-between p-4 lg:px-8" aria-label="Main">
         <div className="flex lg:flex-1">
           <Link href="/" className="-m-1.5 flex items-center gap-2 p-1.5">
-            <Scissors className="h-8 w-8 text-brand-500" />
+            <Image
+              src="/logo.png"
+              alt="QueenG Braids logo"
+              width={40}
+              height={40}
+              priority
+              className="h-10 w-10 rounded-full object-cover ring-1 ring-brand-100"
+            />
             <span className={`text-xl font-bold ${isDarkPage ? "text-white" : "text-foreground"}`}>QueenG Braids</span>
           </Link>
         </div>
@@ -83,7 +92,13 @@ export function Header() {
           <div className={`fixed inset-y-0 right-0 z-50 w-full max-w-sm shadow-xl ${isDarkPage ? "bg-luxury-black" : "bg-background"}`}>
             <div className={`flex items-center justify-between border-b p-4 ${isDarkPage ? "border-white/10" : "border-border"}`}>
               <Link href="/" className="-m-1.5 flex items-center gap-2 p-1.5" onClick={() => setMobileMenuOpen(false)}>
-                <Scissors className="h-8 w-8 text-brand-500" />
+                <Image
+                  src="/logo.png"
+                  alt="QueenG Braids logo"
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 rounded-full object-cover ring-1 ring-brand-100"
+                />
                 <span className={`text-xl font-bold ${isDarkPage ? "text-white" : "text-foreground"}`}>QueenG Braids</span>
               </Link>
               <button

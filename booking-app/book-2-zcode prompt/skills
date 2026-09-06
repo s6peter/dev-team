@@ -71,6 +71,112 @@ scoped by `stylist_id`.
   LIVE db, deactivate the 7 old owner sample services (don't hard-delete — one has a real appt).
 - Reuse the proven slot-hold → Stripe deposit → pending → confirm/decline pipeline unchanged.
 
+================================================================================
+## v4 — Staff roles, commission, payouts, W2 withholding, Stripe Connect, statements
+================================================================================
+Turns the multi-stylist app into a real salon-with-employees model.
+
+### Roles (owner vs stylist) — a stylist must NOT see what the owner sees
+- Owner (`stylists.is_owner=true`): full admin — all tabs incl. Analytics (business-wide),
+  Staff, Settings, and a **Payouts** manager across all stylists.
+- Stylist (`is_owner=false`): a RESTRICTED dashboard — only their own Calendar, Appointments
+  (pending/confirm), Clients, Services, Schedule, Messages, and a new **Earnings** tab. They do
+  NOT see Analytics, Staff, Settings, or any other stylist's data. Enforced by (a) the tab set in
+  AdminDashboard keyed off `isOwner`, and (b) RLS/`stylist_id` scoping already on every table.
+
+### Commission + W2 withholding (owner-controlled; stylist can't edit their own)
+- `stylists.commission_rate numeric` (default **0.55** = 55%), editable per stylist by the owner in
+  the Staff manager. `stylists.is_w2 bool` + `tax_withholding_rate numeric` (owner-set).
+- Payout math per completed appointment: `gross = service_total_cents` (revenue),
+  `commission = round(gross * commission_rate)`, `withholding = is_w2 ? round(commission * tax_withholding_rate) : 0`,
+  `net = commission - withholding`. Sum over a period for a statement. Money in integer cents.
+- **Security:** commission_rate/is_w2/tax_withholding_rate/stripe_account_id/payouts_enabled are
+  guarded by the `guard_stylist_owner_flag` trigger — only the owner (via service-role admin API) or
+  migrations can write them; the stylist's browser session cannot.
+
+### Earnings + statements (stylist-facing)
+- Stylist **Earnings** tab: their completed services (line items), the commission calc
+  (gross → commission % → withholding → net), period totals, and downloadable **statements** (CSV,
+  reuse the finance-CSV pattern with formula-injection neutralization + pagination).
+
+### Bank linking + payouts — **Stripe Connect (Express), test mode**
+- Stylist links their OWN bank via Stripe's hosted onboarding (Claude never sees/enters bank
+  details). `POST /api/admin/connect` → find-or-create Express account (`stylists.stripe_account_id`)
+  + return an Account Link URL; the stylist completes KYC + bank on Stripe. Webhook `account.updated`
+  → set `payouts_enabled`. Earnings tab shows "Link bank" or "Bank linked ✓".
+- Owner **Payouts** manager: per stylist + period, shows computed net; "Send payout" → `stripe.transfers.create`
+  to the connected account (test mode), writes a `payouts` row (status paid, stripe_transfer_id).
+  Also a "Mark paid manually" fallback (method='manual') for cash/Zelle. Gracefully degrade if
+  Connect isn't enabled on the platform test account (show a clear message; manual payout still works).
+- `payouts` ledger table (period, gross/commission/withholding/net, status, method, transfer id) with
+  RLS `stylist_id = current_stylist_id()` so a stylist reads only their own statements.
+
+### New-stylist bookability (fixed)
+- Adding a stylist clones the owner's catalog (`clone_catalog(from,to)` SECURITY DEFINER) so they are
+  immediately bookable; `/api/stylists` still filters to stylists with ≥1 active service.
+
+================================================================================
+## v5 — Stylist lockdown, geofenced time clock, first-login password, avatars, earnings detail
+================================================================================
+
+### Role lockdown (a stylist sees almost nothing of the business)
+- Non-owner dashboard tabs = ONLY **calendar** + **earnings**. No appointments/clients/services/
+  schedule/messages/analytics/staff/settings/payouts. The **Deposits collected** stat is owner-only.
+- The stylist **calendar** is money-free: appointment blocks show client name + time + service only —
+  NO deposit/balance/price, no charge-balance, no fee panel. Owner view unchanged. Driven by an
+  `isOwner` prop on AdminCalendar from AdminDashboard. Server APIs already scope by `stylist_id`.
+
+### Geofenced time clock
+- `time_entries` (clock_in/out + lat/lng + source geo|admin). Business location on the OWNER row
+  (`workplace_lat/lng`, `workplace_radius_m` default 150m), set in Settings ("use my current
+  location"). Clock in/out allowed ONLY within radius (haversine), validated on client AND server
+  (`/api/admin/timeclock` → 403 not_at_workplace / 400 if unset). `ClockWidget` sits atop the
+  calendar tab. Owner **Timesheets** tab edits any entry (source='admin').
+
+### First-login password change
+- New staff are created with `must_change_password=true` (temp password). `admin/page.tsx` renders a
+  ChangePassword gate before the dashboard when the flag is set; on change → `auth.updateUser` +
+  `/api/admin/change-password` clears the flag (service-role; the guard trigger blocks the browser
+  from clearing it to skip the gate). The seeded demo stylist (Bianca) is exempt.
+
+### Staff avatars + earnings detail
+- Owner uploads each stylist's **profile picture** in the Staff manager (reuses /api/admin/upload →
+  `stylists.avatar_url`).
+- Earnings line = **style + variant** ("Box Braids Large — Midback length"), amount charged, the
+  literal calc ("$200 × 55%"), the payout ($110), plus **this-week** and **this-month** totals
+  (America/Chicago). computeEarnings joins service_variants for the label; cents math unchanged.
+
+### Suspend / disable a stylist (owner)
+- `stylists.is_active` (default true). Owner toggles Suspend/Enable per stylist in the Staff manager.
+  Suspended stylists are excluded from `/api/stylists` (booking picker), rejected at `/api/bookings/hold`
+  (409), and shown an "Account suspended" screen instead of the admin dashboard. Owner can't suspend self.
+
+### Phone required at booking
+- The booking wizard requires a valid phone (≥10 digits) before checkout, and `/api/bookings/hold`
+  enforces it server-side (`clientPhone` ≥10 digits) — 400 otherwise.
+
+### Workplace geofence coords
+- Set the workplace by the owner clicking "Use my current location" in Settings (captures exact GPS, so
+  clock-in distance ≈ 0 and cancels GPS bias). A geocoded street address can sit 100–250m off the actual
+  standing spot; prefer the button. Radius is adjustable (default 150m).
+
+### Stylist calendar is VIEW-ONLY + contact-free (hardened)
+- A stylist's calendar shows client NAME + time + service only. Gated on `canSeeMoney` (=isOwner):
+  no lifecycle actions (confirm/decline/complete/no_show/cancel/revert), no reschedule, no drag-to-
+  reschedule, no "New appointment", no money, and NO client email/phone. Enforced in the UI AND at the
+  data layer — `/api/admin/appointments` zeroes money and nulls client email/phone/CRM for non-owners
+  (they get name-only). Owner (isOwner) view is unchanged/full.
+
+### Deposit is one configurable number, reflected everywhere
+- Owner sets it in Settings → it writes `cancellation_policy.deposit_cents` and propagates to every
+  service's `deposit_flat_cents`. Client-facing copy (services page, services grid, policies page) and
+  the booking pricing all derive the amount dynamically — no hardcoded "$50". The e2e suites read the
+  live deposit from the catalog so a deposit change never breaks the money assertions.
+
+### Guard trigger now protects (server-only writes)
+is_owner, commission_rate, is_w2, tax_withholding_rate, stripe_account_id, payouts_enabled,
+must_change_password, workplace_lat/lng/radius_m, is_active — a stylist's browser session can change none.
+
 --------------------------------------------------------------------------------
 ## Locked decisions (unchanged intent, hardened)
 --------------------------------------------------------------------------------

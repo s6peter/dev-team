@@ -16,7 +16,7 @@ export const SITE = {
     state: "TX",
     zip: "76207",
   },
-  geo: { lat: 33.2148, lng: -97.1331 }, // Denton, TX
+  geo: { lat: 33.264679, lng: -97.12628 }, // 4909 Beaver Creek Ave, Denton, TX 76207
   hours: [
     { day: "Sunday", open: "1:00 PM", close: "8:00 PM" },
     { day: "Monday", open: "4:00 PM", close: "8:00 PM" },

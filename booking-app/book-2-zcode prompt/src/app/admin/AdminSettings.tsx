@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Check, Copy, Loader2, Save, ScrollText, Store } from "lucide-react";
+import { CalendarDays, Check, Copy, Loader2, MapPin, Save, ScrollText, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Profile {
@@ -13,6 +13,7 @@ interface Profile {
 }
 
 interface Policy {
+  deposit_cents: number;
   cancel_notice_hours: number;
   reschedule_notice_hours: number;
   blow_dry_fee_cents: number;
@@ -21,10 +22,24 @@ interface Policy {
   policy_text: string | null;
 }
 
+interface Workplace {
+  lat: number | null;
+  lng: number | null;
+  radius_m: number;
+}
+
 interface SettingsResponse {
   profile: Profile;
   policy: Policy | null;
+  isOwner?: boolean;
+  workplace?: Workplace;
   calendarFeedUrl?: string;
+}
+
+interface WorkplaceForm {
+  lat: string;
+  lng: string;
+  radiusM: string;
 }
 
 interface ProfileForm {
@@ -35,6 +50,7 @@ interface ProfileForm {
 }
 
 interface PolicyForm {
+  depositDollars: string;
   cancelNoticeHours: string;
   rescheduleNoticeHours: string;
   blowDryFeeDollars: string;
@@ -46,8 +62,11 @@ interface PolicyForm {
 const inputClass =
   "w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
+const EMPTY_WORKPLACE: WorkplaceForm = { lat: "", lng: "", radiusM: "150" };
+
 const EMPTY_PROFILE: ProfileForm = { name: "", phone: "", bio: "", instagram: "" };
 const EMPTY_POLICY: PolicyForm = {
+  depositDollars: "",
   cancelNoticeHours: "",
   rescheduleNoticeHours: "",
   blowDryFeeDollars: "",
@@ -120,6 +139,13 @@ export function AdminSettings() {
   const [feedUrl, setFeedUrl] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const [isOwner, setIsOwner] = useState(false);
+  const [workplaceForm, setWorkplaceForm] = useState<WorkplaceForm>(EMPTY_WORKPLACE);
+  const [workplaceSaving, setWorkplaceSaving] = useState(false);
+  const [workplaceError, setWorkplaceError] = useState<string | null>(null);
+  const [workplaceSaved, setWorkplaceSaved] = useState(false);
+  const [locating, setLocating] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -127,6 +153,12 @@ export function AdminSettings() {
       const data = await apiFetch<SettingsResponse>("/api/admin/settings");
       setEmail(data.profile.email);
       setFeedUrl(data.calendarFeedUrl ?? "");
+      setIsOwner(Boolean(data.isOwner));
+      setWorkplaceForm({
+        lat: data.workplace?.lat != null ? String(data.workplace.lat) : "",
+        lng: data.workplace?.lng != null ? String(data.workplace.lng) : "",
+        radiusM: data.workplace?.radius_m != null ? String(data.workplace.radius_m) : "150",
+      });
       setProfileForm({
         name: data.profile.name ?? "",
         phone: data.profile.phone ?? "",
@@ -135,6 +167,7 @@ export function AdminSettings() {
       });
       const p = data.policy;
       setPolicyForm({
+        depositDollars: p ? centsToInput(p.deposit_cents) : "50",
         cancelNoticeHours: p ? String(p.cancel_notice_hours) : "24",
         rescheduleNoticeHours: p ? String(p.reschedule_notice_hours) : "24",
         blowDryFeeDollars: p ? centsToInput(p.blow_dry_fee_cents) : "",
@@ -200,6 +233,7 @@ export function AdminSettings() {
     const graceMinutes = parseWholeNumber(policyForm.graceMinutes) ?? 0;
     const blowDryFeeCents = parseDollarsToCents(policyForm.blowDryFeeDollars) ?? 0;
     const lateFeeCents = parseDollarsToCents(policyForm.lateFeeDollars) ?? 0;
+    const depositCents = parseDollarsToCents(policyForm.depositDollars) ?? 0;
 
     if (
       cancelNoticeHours < 0 ||
@@ -228,6 +262,7 @@ export function AdminSettings() {
         "/api/admin/settings",
         jsonInit("PUT", {
           policy: {
+            depositCents,
             cancelNoticeHours,
             rescheduleNoticeHours,
             blowDryFeeCents,
@@ -242,6 +277,70 @@ export function AdminSettings() {
       setPolicyError(e instanceof Error ? e.message : "Could not save policies.");
     } finally {
       setPolicySaving(false);
+    }
+  }
+
+  function updateWorkplace(patch: Partial<WorkplaceForm>) {
+    setWorkplaceForm((prev) => ({ ...prev, ...patch }));
+    setWorkplaceSaved(false);
+    setWorkplaceError(null);
+  }
+
+  function useCurrentLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setWorkplaceError("Location is not available in this browser.");
+      return;
+    }
+    setLocating(true);
+    setWorkplaceError(null);
+    setWorkplaceSaved(false);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setWorkplaceForm((prev) => ({
+          ...prev,
+          lat: pos.coords.latitude.toFixed(6),
+          lng: pos.coords.longitude.toFixed(6),
+        }));
+        setLocating(false);
+      },
+      (err) => {
+        setWorkplaceError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission denied. Enter the coordinates manually."
+            : "Could not read your location."
+        );
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 }
+    );
+  }
+
+  async function saveWorkplace() {
+    const lat = Number(workplaceForm.lat.trim());
+    const lng = Number(workplaceForm.lng.trim());
+    const radiusM = parseWholeNumber(workplaceForm.radiusM) ?? 0;
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      setWorkplaceError("Latitude must be between -90 and 90.");
+      return;
+    }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      setWorkplaceError("Longitude must be between -180 and 180.");
+      return;
+    }
+    if (radiusM < 10 || radiusM > 5000) {
+      setWorkplaceError("Radius must be between 10 and 5000 metres.");
+      return;
+    }
+    setWorkplaceSaving(true);
+    setWorkplaceError(null);
+    setWorkplaceSaved(false);
+    try {
+      await apiFetch("/api/admin/settings", jsonInit("PUT", { workplace: { lat, lng, radiusM } }));
+      setWorkplaceSaved(true);
+    } catch (e) {
+      setWorkplaceError(e instanceof Error ? e.message : "Could not save the workplace location.");
+    } finally {
+      setWorkplaceSaving(false);
     }
   }
 
@@ -289,6 +388,98 @@ export function AdminSettings() {
               </div>
             </div>
           </section>
+
+          {/* WORKPLACE LOCATION (owner only) */}
+          {isOwner && (
+            <section>
+              <div className="mb-3 flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-brand-600" />
+                <h2 className="text-lg font-semibold">Workplace location</h2>
+              </div>
+
+              <form
+                className="rounded-xl border border-border p-4 sm:p-6"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveWorkplace();
+                }}
+              >
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Staff can only clock in or out when they are within the radius of this location. Set it
+                  from the salon using &ldquo;Use my current location&rdquo;, or enter the coordinates manually.
+                </p>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Field label="Latitude">
+                    <input
+                      type="number"
+                      step="any"
+                      min="-90"
+                      max="90"
+                      className={inputClass}
+                      value={workplaceForm.lat}
+                      onChange={(e) => updateWorkplace({ lat: e.target.value })}
+                      placeholder="33.150800"
+                    />
+                  </Field>
+                  <Field label="Longitude">
+                    <input
+                      type="number"
+                      step="any"
+                      min="-180"
+                      max="180"
+                      className={inputClass}
+                      value={workplaceForm.lng}
+                      onChange={(e) => updateWorkplace({ lng: e.target.value })}
+                      placeholder="-96.823600"
+                    />
+                  </Field>
+                  <Field label="Radius (metres)">
+                    <input
+                      type="number"
+                      min="10"
+                      max="5000"
+                      step="1"
+                      className={inputClass}
+                      value={workplaceForm.radiusM}
+                      onChange={(e) => updateWorkplace({ radiusM: e.target.value })}
+                      placeholder="150"
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <Button type="button" variant="outline" onClick={useCurrentLocation} disabled={locating || workplaceSaving}>
+                    {locating ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <MapPin className="mr-1 h-4 w-4" />
+                    )}
+                    Use my current location
+                  </Button>
+                  <div className="flex items-center gap-3">
+                    {workplaceError && <span className="text-sm text-red-600">{workplaceError}</span>}
+                    {workplaceSaved && !workplaceError && (
+                      <span className="flex items-center gap-1 text-sm text-green-600">
+                        <Check className="h-4 w-4" />
+                        Saved
+                      </span>
+                    )}
+                    <Button type="submit" className="bg-brand-500 hover:bg-brand-600" disabled={workplaceSaving}>
+                      {workplaceSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Save className="mr-1 h-4 w-4" />
+                          Save location
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </section>
+          )}
 
           {/* BUSINESS PROFILE */}
           <section>
@@ -388,6 +579,17 @@ export function AdminSettings() {
               }}
             >
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Deposit amount ($)">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className={inputClass}
+                    value={policyForm.depositDollars}
+                    onChange={(e) => updatePolicy({ depositDollars: e.target.value })}
+                    placeholder="50.00"
+                  />
+                </Field>
                 <Field label="Cancellation notice (hours)">
                   <input
                     type="number"

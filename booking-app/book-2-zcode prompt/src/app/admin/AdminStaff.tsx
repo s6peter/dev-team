@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Crown, KeyRound, Loader2, ShieldAlert, UserPlus, Users, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Copy, Crown, ImagePlus, KeyRound, Loader2, Percent, ShieldAlert, User, UserPlus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /** A row from GET /api/admin/staff. */
@@ -14,6 +14,30 @@ interface Stylist {
   instagram: string | null;
   is_owner: boolean;
   user_id: string | null;
+  commission_rate: number;
+  is_w2: boolean;
+  tax_withholding_rate: number;
+  avatar_url: string | null;
+  is_active: boolean;
+}
+
+/** Editable payroll fields, held as percent strings while the owner types. */
+interface PayrollDraft {
+  commissionPct: string;
+  isW2: boolean;
+  withholdingPct: string;
+}
+
+/** Fraction (0-1) -> whole-percent string for display in a percent input. */
+function fractionToPct(fraction: number): string {
+  return String(Math.round(fraction * 1000) / 10);
+}
+
+/** Percent string -> fraction (0-1), clamped; returns null if not a valid number. */
+function pctToFraction(pct: string): number | null {
+  const n = Number(pct);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(1, Math.max(0, n / 100));
 }
 
 interface StaffDraft {
@@ -59,6 +83,17 @@ export function AdminStaff() {
 
   const [credentials, setCredentials] = useState<NewCredentials | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Per-stylist inline payroll editor.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [payroll, setPayroll] = useState<PayrollDraft | null>(null);
+  const [payrollSaving, setPayrollSaving] = useState(false);
+  const [payrollError, setPayrollError] = useState<string | null>(null);
+
+  // Per-stylist avatar upload state.
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<{ id: string; message: string } | null>(null);
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -134,6 +169,122 @@ export function AdminStaff() {
       setFormError("Could not add stylist. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openPayroll(s: Stylist) {
+    setPayrollError(null);
+    setEditingId(s.id);
+    setPayroll({
+      commissionPct: fractionToPct(s.commission_rate),
+      isW2: s.is_w2,
+      withholdingPct: fractionToPct(s.tax_withholding_rate),
+    });
+  }
+
+  function closePayroll() {
+    setEditingId(null);
+    setPayroll(null);
+    setPayrollError(null);
+  }
+
+  function updatePayroll(patch: Partial<PayrollDraft>) {
+    setPayroll((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
+  async function savePayroll(stylistId: string) {
+    if (!payroll) return;
+    const commission_rate = pctToFraction(payroll.commissionPct);
+    if (commission_rate === null) {
+      setPayrollError("Enter a valid commission percent.");
+      return;
+    }
+    const tax_withholding_rate = pctToFraction(payroll.withholdingPct);
+    if (payroll.isW2 && tax_withholding_rate === null) {
+      setPayrollError("Enter a valid withholding percent.");
+      return;
+    }
+    setPayrollSaving(true);
+    setPayrollError(null);
+    try {
+      const res = await fetch(
+        "/api/admin/staff",
+        jsonInit("PATCH", {
+          stylistId,
+          commission_rate,
+          is_w2: payroll.isW2,
+          // Withholding only matters for W2; still persist the entered value when present.
+          tax_withholding_rate: tax_withholding_rate ?? 0,
+        })
+      );
+      const data: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        setPayrollError(
+          isRecord(data) && typeof data.error === "string" ? data.error : `Request failed (${res.status})`
+        );
+        return;
+      }
+      closePayroll();
+      await load();
+    } catch {
+      setPayrollError("Could not save. Please try again.");
+    } finally {
+      setPayrollSaving(false);
+    }
+  }
+
+  async function toggleActive(stylistId: string, next: boolean) {
+    await fetch("/api/admin/staff", jsonInit("PATCH", { stylistId, is_active: next }));
+    await load();
+  }
+
+  async function removeStylist(st: Stylist) {
+    if (!confirm(`Permanently remove ${st.name}? This deletes their account, calendar, services, clients and all their data. This cannot be undone.`)) return;
+    const res = await fetch("/api/admin/staff", jsonInit("DELETE", { stylistId: st.id }));
+    if (!res.ok) {
+      const d: unknown = await res.json().catch(() => null);
+      alert(isRecord(d) && typeof d.error === "string" ? d.error : "Could not remove stylist.");
+      return;
+    }
+    await load();
+  }
+
+  async function uploadAvatar(stylistId: string, file: File) {
+    setUploadingId(stylistId);
+    setUploadError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const upRes = await fetch("/api/admin/upload", { method: "POST", body: fd });
+      const upData: unknown = await upRes.json().catch(() => null);
+      if (!upRes.ok || !(isRecord(upData) && typeof upData.url === "string")) {
+        setUploadError({
+          id: stylistId,
+          message:
+            isRecord(upData) && typeof upData.error === "string" ? upData.error : `Upload failed (${upRes.status})`,
+        });
+        return;
+      }
+      const patchRes = await fetch(
+        "/api/admin/staff",
+        jsonInit("PATCH", { stylistId, avatar_url: upData.url })
+      );
+      const patchData: unknown = await patchRes.json().catch(() => null);
+      if (!patchRes.ok) {
+        setUploadError({
+          id: stylistId,
+          message:
+            isRecord(patchData) && typeof patchData.error === "string"
+              ? patchData.error
+              : `Request failed (${patchRes.status})`,
+        });
+        return;
+      }
+      await load();
+    } catch {
+      setUploadError({ id: stylistId, message: "Could not upload photo. Please try again." });
+    } finally {
+      setUploadingId(null);
     }
   }
 
@@ -231,27 +382,168 @@ export function AdminStaff() {
       ) : (
         <div className="space-y-3">
           {staff.map((s) => (
-            <div
-              key={s.id}
-              className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border p-4"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold">{s.name}</span>
-                  {s.is_owner && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
-                      <Crown className="h-3 w-3" />
-                      Owner
+            <div key={s.id} className="rounded-xl border border-border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex min-w-0 gap-3">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
+                      {s.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.avatar_url} alt={`${s.name}'s photo`} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                          <User className="h-7 w-7" />
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      ref={(el) => {
+                        fileInputs.current[s.id] = el;
+                      }}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadAvatar(s.id, file);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-auto px-1 py-0.5 text-xs"
+                      disabled={uploadingId === s.id}
+                      onClick={() => fileInputs.current[s.id]?.click()}
+                    >
+                      {uploadingId === s.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <ImagePlus className="mr-1 h-3.5 w-3.5" />
+                          {s.avatar_url ? "Change" : "Upload photo"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{s.name}</span>
+                    {s.is_owner && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
+                        <Crown className="h-3 w-3" />
+                        Owner
+                      </span>
+                    )}
+                    {!s.is_active && (
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Suspended</span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {s.email}
+                    {s.phone ? ` · ${s.phone}` : ""}
+                    {s.instagram ? ` · @${s.instagram.replace(/^@/, "")}` : ""}
+                  </div>
+                  {s.bio && <p className="mt-2 max-w-prose text-sm text-muted-foreground">{s.bio}</p>}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
+                      <Percent className="h-3 w-3" />
+                      {fractionToPct(s.commission_rate)}% commission
                     </span>
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
+                      {s.is_w2 ? "W-2 employee" : "1099 contractor"}
+                    </span>
+                    {s.is_w2 && (
+                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
+                        {fractionToPct(s.tax_withholding_rate)}% withholding
+                      </span>
+                    )}
+                  </div>
+                  {uploadError?.id === s.id && (
+                    <p className="mt-2 text-xs text-red-600">{uploadError.message}</p>
                   )}
                 </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {s.email}
-                  {s.phone ? ` · ${s.phone}` : ""}
-                  {s.instagram ? ` · @${s.instagram.replace(/^@/, "")}` : ""}
                 </div>
-                {s.bio && <p className="mt-2 max-w-prose text-sm text-muted-foreground">{s.bio}</p>}
+                {editingId !== s.id && (
+                  <div className="flex flex-shrink-0 gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openPayroll(s)}>Edit pay</Button>
+                    {!s.is_owner && (
+                      <Button size="sm" variant="outline" className={s.is_active ? "text-red-600 hover:text-red-700" : "text-green-600 hover:text-green-700"} onClick={() => toggleActive(s.id, !s.is_active)}>
+                        {s.is_active ? "Suspend" : "Enable"}
+                      </Button>
+                    )}
+                    {!s.is_owner && (
+                      <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => removeStylist(s)}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {editingId === s.id && payroll && (
+                <form
+                  className="mt-4 space-y-4 rounded-lg border border-brand-200 bg-brand-50 p-4"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    savePayroll(s.id);
+                  }}
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Commission %">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        className={inputClass}
+                        value={payroll.commissionPct}
+                        onChange={(e) => updatePayroll({ commissionPct: e.target.value })}
+                        placeholder="e.g. 55"
+                      />
+                    </Field>
+                    <Field label="Withholding %">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        className={inputClass}
+                        value={payroll.withholdingPct}
+                        onChange={(e) => updatePayroll({ withholdingPct: e.target.value })}
+                        placeholder="e.g. 20"
+                        disabled={!payroll.isW2}
+                      />
+                    </Field>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={payroll.isW2}
+                      onChange={(e) => updatePayroll({ isW2: e.target.checked })}
+                    />
+                    W-2 employee (withhold taxes from commission)
+                  </label>
+                  {!payroll.isW2 && (
+                    <p className="text-xs text-muted-foreground">
+                      1099 contractors have no withholding; that field applies only to W-2 employees.
+                    </p>
+                  )}
+
+                  {payrollError && <p className="text-sm text-red-600">{payrollError}</p>}
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={closePayroll} disabled={payrollSaving}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-brand-500 hover:bg-brand-600" disabled={payrollSaving}>
+                      {payrollSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                    </Button>
+                  </div>
+                </form>
+              )}
             </div>
           ))}
         </div>

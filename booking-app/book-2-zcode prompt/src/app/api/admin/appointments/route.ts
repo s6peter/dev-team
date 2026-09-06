@@ -48,7 +48,24 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ appointments: data ?? [] });
+  // Non-owner stylists must not see money OR client contact/CRM — strip it from the
+  // payload, not just the UI (defense in depth): they get client NAME + schedule only.
+  const rows =
+    stylist.is_owner
+      ? (data ?? [])
+      : (data ?? []).map((a) => {
+          const c = a.client as { name?: string } | null;
+          return {
+            ...a,
+            deposit_cents: 0,
+            balance_due_cents: 0,
+            service_total_cents: 0,
+            tax_cents: 0,
+            fee_charged_cents: 0,
+            client: c ? { name: c.name ?? "Client", email: null, phone: null, tags: [], allergies: null, notes: null, lifetime_spend: 0 } : c,
+          };
+        });
+  return NextResponse.json({ appointments: rows });
 }
 
 /** PATCH — confirm/decline/complete/no_show/cancel/revert. Decline & cancel refund. */

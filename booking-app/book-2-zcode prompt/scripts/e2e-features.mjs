@@ -14,14 +14,15 @@ const stdGroup=(cat.groups||[]).find(g=>g.slug==="adult-braids")||(cat.groups||[
 const SVC=(stdGroup?.services||[]).find(s=>/box braids/i.test(s.name))||(stdGroup?.services||[])[0];
 const VAR=(SVC?.variants||[]).find(v=>!v.price_from)||(SVC?.variants||[])[0];
 if(!VAR){console.error("no catalog variant");process.exit(2);}
-const PRICE=VAR.price_cents, MIN=VAR.duration_minutes||SVC.duration_minutes, BAL=PRICE-5000;
+const DEPOSIT=cat.policy?.deposit_cents ?? SVC.deposit_flat_cents ?? 5000;
+const PRICE=VAR.price_cents, MIN=VAR.duration_minutes||SVC.duration_minutes, BAL=PRICE-DEPOSIT;
 console.log(`catalog: "${SVC.name} / ${VAR.label}" $${PRICE/100} (${MIN}m) balance $${BAL/100}`);
 
 async function firstSlot(date){const a=await(await fetch(`${BASE}/api/availability?date=${date}&serviceId=${SVC.id}&variantId=${VAR.id}&minutes=${MIN}`)).json();return(a.slots||[])[0];}
 async function book(email,date,start){
   if(!start) start=await firstSlot(date);
   if(!start) return {error:"no open slot"};
-  const h=await(await fetch(`${BASE}/api/bookings/hold`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceId:SVC.id,variantId:VAR.id,tierId:null,addonIds:[],date,startTime:start,clientName:"Feat "+email.split("@")[0],clientEmail:email,clientPhone:"+15551111",notes:"",intake:[],inspirationPhotos:[],policyConsented:true})})).json();
+  const h=await(await fetch(`${BASE}/api/bookings/hold`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceId:SVC.id,variantId:VAR.id,tierId:null,addonIds:[],date,startTime:start,clientName:"Feat "+email.split("@")[0],clientEmail:email,clientPhone:"+15551234567",notes:"",intake:[],inspirationPhotos:[],policyConsented:true})})).json();
   if(!h.paymentIntentId)return{error:h.error};
   await stripe.paymentIntents.confirm(h.paymentIntentId,{payment_method:"pm_card_visa",return_url:BASE});
   const c=await(await fetch(`${BASE}/api/bookings/confirm`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paymentIntentId:h.paymentIntentId})})).json();

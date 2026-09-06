@@ -28,6 +28,9 @@ const customVar = (customSvc?.variants||[])[0];
 if(!stdVar || !customVar){ console.error("Could not resolve catalog variants", {stdSvc:stdSvc?.name, customSvc:customSvc?.name}); process.exit(2); }
 const STD_PRICE = stdVar.price_cents;                 // service total for the standard variant
 const STD_MIN = stdVar.duration_minutes || stdSvc.duration_minutes;
+const DEPOSIT = cat.policy?.deposit_cents ?? stdSvc.deposit_flat_cents ?? 5000;   // configurable deposit
+const TAX = Math.round(DEPOSIT * (stdSvc.tax_rate ?? 0.0825));                      // tax on deposit only
+const CHARGED = DEPOSIT + TAX;
 console.log(`catalog: standard "${stdSvc.name} / ${stdVar.label}" $${STD_PRICE/100} (${STD_MIN}m)  |  custom "${customSvc.name} / ${customVar.label}"`);
 
 // First actually-open slot for a variant on a date (robust against foreign holds).
@@ -37,11 +40,16 @@ async function firstSlot(serviceId, variantId, date, minutes){
 }
 
 // ── Book a deposit appointment via hold → Stripe confirm → confirm ───────────
-// start may be null → the first real open slot for that variant/date is used.
+const addDaysStr=(dateStr,n)=>{const t=new Date(`${dateStr}T00:00:00Z`);t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10);};
+// start may be null → scan forward from `date` for the first day that has a real
+// open slot for this variant (handles long services that don't fit short-hours days).
 async function bookDeposit(email, serviceId, variantId, date, start, photos=[], minutes){
-  if(!start) start = await firstSlot(serviceId, variantId, date, minutes ?? STD_MIN);
-  if(!start) return { error:"no open slot", hold:{} };
-  const hold = await (await fetch(`${BASE}/api/bookings/hold`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceId,variantId,tierId:null,addonIds:[],date,startTime:start,clientName:"E2E "+email.split("@")[0],clientEmail:email,clientPhone:"+15550000",notes:"",intake:[],inspirationPhotos:photos,policyConsented:true})})).json();
+  let bookDate=date, slot=start;
+  if(!slot){
+    for(let i=0;i<14 && !slot;i++){ const d=addDaysStr(date,i); const s=await firstSlot(serviceId, variantId, d, minutes ?? STD_MIN); if(s){ bookDate=d; slot=s; } }
+  }
+  if(!slot) return { error:"no open slot", hold:{} };
+  const hold = await (await fetch(`${BASE}/api/bookings/hold`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({serviceId,variantId,tierId:null,addonIds:[],date:bookDate,startTime:slot,clientName:"E2E "+email.split("@")[0],clientEmail:email,clientPhone:"+15551234567",notes:"",intake:[],inspirationPhotos:photos,policyConsented:true})})).json();
   if(!hold.paymentIntentId) return { error: hold.error||"hold failed", hold };
   await stripe.paymentIntents.confirm(hold.paymentIntentId,{payment_method:"pm_card_visa",return_url:BASE});
   const conf = await (await fetch(`${BASE}/api/bookings/confirm`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({paymentIntentId:hold.paymentIntentId})})).json();
@@ -60,22 +68,22 @@ ok("admin session established", adminOk);
 console.log("\n[1] Booking + card-on-file (standard variant, money from the variant)");
 const bk = await bookDeposit("e2e_card@example.com", stdSvc.id, stdVar.id, salonDay(6), null);
 ok("deposit booking created", !!bk.appointmentId, JSON.stringify(bk).slice(0,160));
-ok(`amounts: $50 flat deposit, tax-on-deposit only ($4.13), balance = price-50 ($${(STD_PRICE-5000)/100})`,
-   bk.amounts && bk.amounts.depositCents===5000 && bk.amounts.taxCents===413 && bk.amounts.serviceTotalCents===STD_PRICE && bk.amounts.balanceDueCents===STD_PRICE-5000 && bk.amounts.chargedNowCents===5413,
+ok(`amounts: $${DEPOSIT/100} flat deposit, tax-on-deposit only ($${(TAX/100).toFixed(2)}), balance = price-deposit ($${(STD_PRICE-DEPOSIT)/100})`,
+   bk.amounts && bk.amounts.depositCents===DEPOSIT && bk.amounts.taxCents===TAX && bk.amounts.serviceTotalCents===STD_PRICE && bk.amounts.balanceDueCents===STD_PRICE-DEPOSIT && bk.amounts.chargedNowCents===CHARGED,
    JSON.stringify(bk.amounts));
 
 console.log("\n[1b] Custom group: deposit-only (balance 0), inspiration photo attached");
 const bkC = await bookDeposit("e2e_custom@example.com", customSvc.id, customVar.id, salonDay(10), null, ["https://example.com/inspo.jpg"], customVar.duration_minutes||customSvc.duration_minutes);
 ok("custom booking created", !!bkC.appointmentId, JSON.stringify(bkC).slice(0,160));
-ok("custom: $50 deposit, tax $4.13, balance 0 (deposit-only)",
-   bkC.amounts && bkC.amounts.depositCents===5000 && bkC.amounts.taxCents===413 && bkC.amounts.balanceDueCents===0 && bkC.amounts.chargedNowCents===5413,
+ok(`custom: $${DEPOSIT/100} deposit, tax $${(TAX/100).toFixed(2)}, balance 0 (deposit-only)`,
+   bkC.amounts && bkC.amounts.depositCents===DEPOSIT && bkC.amounts.taxCents===TAX && bkC.amounts.balanceDueCents===0 && bkC.amounts.chargedNowCents===CHARGED,
    JSON.stringify(bkC.amounts));
 
 console.log("\n[2] No-show fee: deposit-netting + idempotency guard");
 await adminFetch("/api/admin/appointments",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk.appointmentId,action:"confirm"})});
 const preview = await adminFetch(`/api/admin/fees?appointmentId=${bk.appointmentId}&kind=no_show`);
-ok(`fee preview nets deposit (gross $${STD_PRICE/100} - $50 = $${(STD_PRICE-5000)/100})`,
-   preview.json && preview.json.grossCents===STD_PRICE && preview.json.depositHeldCents===5000 && preview.json.feeCents===STD_PRICE-5000,
+ok(`fee preview nets deposit (gross $${STD_PRICE/100} - $${DEPOSIT/100} = $${(STD_PRICE-DEPOSIT)/100})`,
+   preview.json && preview.json.grossCents===STD_PRICE && preview.json.depositHeldCents===DEPOSIT && preview.json.feeCents===STD_PRICE-DEPOSIT,
    JSON.stringify(preview.json));
 const charge1 = await adminFetch("/api/admin/fees",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk.appointmentId,kind:"no_show"})});
 ok("fee charged once (succeeded)", charge1.json && charge1.json.ok && charge1.json.status==="succeeded", JSON.stringify(charge1.json));
@@ -88,11 +96,16 @@ ok("reschedule seed booking created", !!bk2.appointmentId, JSON.stringify(bk2).s
 await adminFetch("/api/admin/appointments",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,action:"confirm"})});
 const badMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:salonDay(8),startTime:"03:00"})}); // 3am = outside hours
 ok("reschedule to out-of-hours 03:00 rejected (409)", badMove.status===409, `status=${badMove.status} ${JSON.stringify(badMove.json)}`);
-const moveDate = salonDay(8);
-const moveAvail = await (await fetch(`${BASE}/api/availability?date=${moveDate}&serviceId=${stdSvc.id}&variantId=${stdVar.id}&minutes=${STD_MIN}`)).json();
-const validSlot = (moveAvail.slots||[])[0];
+// Scan forward for a day that actually has an open slot for this variant
+// (skips closed days like non-open weekdays and days already full of real bookings).
+let moveDate=null, validSlot=null;
+for(let d=8; d<=21 && !validSlot; d++){
+  const dt=salonDay(d);
+  const s=await firstSlot(stdSvc.id, stdVar.id, dt, STD_MIN);
+  if(s){ moveDate=dt; validSlot=s; }
+}
 const goodMove = await adminFetch("/api/admin/appointments",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:bk2.appointmentId,date:moveDate,startTime:validSlot})});
-ok(`reschedule to a real open slot (${validSlot}) accepted (200)`, goodMove.status===200, `status=${goodMove.status} slot=${validSlot} ${JSON.stringify(goodMove.json)}`);
+ok(`reschedule to a real open slot (${moveDate} ${validSlot}) accepted (200)`, goodMove.status===200, `status=${goodMove.status} date=${moveDate} slot=${validSlot} ${JSON.stringify(goodMove.json)}`);
 
 console.log("\n[4] Decline -> auto-refund");
 const bk3 = await bookDeposit("e2e_decline@example.com", stdSvc.id, stdVar.id, salonDay(9), null);

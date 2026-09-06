@@ -24,9 +24,9 @@ export interface AccountAppointment {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700",
+  pending: "bg-brand-100 text-brand-700",
   confirmed: "bg-green-100 text-green-700",
-  completed: "bg-blue-100 text-blue-700",
+  completed: "bg-brand-50 text-brand-600",
   declined: "bg-red-100 text-red-700",
   cancelled: "bg-gray-100 text-gray-600",
   no_show: "bg-red-100 text-red-700",
@@ -195,7 +195,7 @@ function ReviewModal({ onClose }: { onClose: () => void }) {
             <div className="mb-4 flex gap-1">
               {[1, 2, 3, 4, 5].map((n) => (
                 <button key={n} onClick={() => setRating(n)} aria-label={`${n} stars`}>
-                  <Star className={`h-8 w-8 ${n <= rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
+                  <Star className={`h-8 w-8 ${n <= rating ? "fill-brand-500 text-brand-500" : "text-gray-300"}`} />
                 </button>
               ))}
             </div>

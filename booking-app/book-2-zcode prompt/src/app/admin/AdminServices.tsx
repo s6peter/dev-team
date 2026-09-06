@@ -450,8 +450,8 @@ export function AdminServices() {
           </Button>
         </div>
       )}
-      {groupError && <p className="mb-3 text-sm text-amber-700">{groupError}</p>}
-      {serviceError && <p className="mb-3 text-sm text-amber-700">{serviceError}</p>}
+      {groupError && <p className="mb-3 text-sm text-red-600">{groupError}</p>}
+      {serviceError && <p className="mb-3 text-sm text-red-600">{serviceError}</p>}
 
       {loading ? (
         <div className="flex items-center py-16 text-muted-foreground">
@@ -783,7 +783,7 @@ function ServiceForm({ draft, groups, saving, error, onClose, onSubmit, onChange
           Requires deposit
         </label>
 
-        <Field label="Deposit ($) — leave blank for the $50 default">
+        <Field label="Deposit ($) — leave blank for the salon default">
           <input type="number" min="0" step="0.01" className={inputClass} value={draft.depositDollars} disabled={!draft.requiresDeposit} onChange={(e) => onChange({ depositDollars: e.target.value })} placeholder="Default" />
         </Field>
 

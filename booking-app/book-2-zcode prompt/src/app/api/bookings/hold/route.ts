@@ -17,7 +17,7 @@ const bodySchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   clientName: z.string().min(1).max(120),
   clientEmail: z.string().email(),
-  clientPhone: z.string().max(40).optional().default(""),
+  clientPhone: z.string().max(40).refine((v) => v.replace(/\D/g, "").length >= 10, "A valid phone number is required."),
   notes: z.string().max(2000).optional().default(""),
   intake: z
     .array(z.object({ question: z.string(), answer: z.string() }))
@@ -45,6 +45,16 @@ export async function POST(request: Request) {
 
   const supabase = createSupabaseAdminClient();
 
+  // Reject bookings for a suspended stylist (defense beyond the picker filter).
+  const { data: st } = await supabase
+    .from("stylists")
+    .select("is_active")
+    .eq("id", b.stylistId || STYLIST_ID)
+    .maybeSingle();
+  if (st && st.is_active === false) {
+    return NextResponse.json({ error: "This stylist is not currently accepting bookings." }, { status: 409 });
+  }
+
   // Reserve the slot + stash the booking payload (raises on conflict/past).
   const { data: hold, error: holdErr } = await supabase.rpc("hold_slot", {
     p_stylist: b.stylistId || STYLIST_ID,
@@ -68,6 +78,7 @@ export async function POST(request: Request) {
     if (msg.includes("slot_unavailable")) return NextResponse.json({ error: "That time was just taken. Please pick another slot." }, { status: 409 });
     if (msg.includes("slot_in_past")) return NextResponse.json({ error: "That time is in the past." }, { status: 400 });
     if (msg.includes("service_not_found")) return NextResponse.json({ error: "Service not found." }, { status: 404 });
+    if (msg.includes("variant_not_found")) return NextResponse.json({ error: "That option is no longer available." }, { status: 404 });
     console.error("hold_slot failed", holdErr);
     return NextResponse.json({ error: "Could not hold that slot." }, { status: 500 });
   }

@@ -98,8 +98,9 @@ export default function BookPage() {
   const pricing = useMemo(() => {
     if (!service || !variant) return null;
     return computePricing({
-      // Standard: charge the variant price. Custom: deposit only (balance $0).
-      basePriceCents: isCustom ? (service.deposit_flat_cents ?? variant.price_cents) : variant.price_cents,
+      // Standard: charge the variant price. Custom: deposit only (balance $0) —
+      // never fall back to the variant price, which would show a non-deposit total.
+      basePriceCents: isCustom ? (service.deposit_flat_cents ?? 5000) : variant.price_cents,
       taxRate: service.tax_rate,
       depositPercent: service.deposit_percent,
       requiresDeposit: service.requires_deposit,
@@ -391,7 +392,7 @@ export default function BookPage() {
               </div>
             )}
 
-            {/* Custom group: require an inspiration photo, show the salon phone, then deposit-only checkout. */}
+            {/* Custom group: optional inspiration photo + optional description, show the salon phone, then deposit-only checkout. */}
             {service && isCustom && (
               <div className="mt-6 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
                 {service.description && <p className="text-sm text-muted-foreground">{service.description}</p>}
@@ -401,8 +402,8 @@ export default function BookPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Inspiration photo <span className="text-brand-500">*</span></label>
-                  <p className="mb-2 text-xs text-muted-foreground">Upload at least one photo of the look you want so we can prep.</p>
+                  <label className="mb-1 block text-sm font-medium">Inspiration photo (optional)</label>
+                  <p className="mb-2 text-xs text-muted-foreground">Optionally add a photo of the look you want so we can prep.</p>
                   <div className="flex flex-wrap gap-2">
                     {photos.map((url) => (
                       <div key={url} className="relative h-20 w-20">
@@ -420,9 +421,14 @@ export default function BookPage() {
                   </div>
                 </div>
 
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Describe your style (optional)</label>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full rounded-lg border border-border p-2.5 text-sm" placeholder="Tell us the look you want — length, color, any details…" />
+                </div>
+
                 <Button
                   className="w-full bg-brand-500 hover:bg-brand-600"
-                  disabled={photos.length === 0 || !service.variants?.length}
+                  disabled={!service.variants?.length}
                   onClick={() => service.variants?.[0] && bookVariant(service, service.variants[0])}
                 >
                   Book now
@@ -479,7 +485,7 @@ export default function BookPage() {
             <p className="text-muted-foreground">No account needed — we&apos;ll email you a confirmation.</p>
             <Field label="Full name" value={clientName} onChange={setClientName} required autoComplete="name" />
             <Field label="Email" type="email" value={clientEmail} onChange={setClientEmail} required autoComplete="email" />
-            <Field label="Phone (for reminders)" type="tel" value={clientPhone} onChange={setClientPhone} autoComplete="tel" />
+            <Field label="Phone (for reminders)" type="tel" value={clientPhone} onChange={setClientPhone} required autoComplete="tel" />
 
             <div>
               <label className="mb-1 block text-sm font-medium">Anything I should know? (optional)</label>
@@ -509,7 +515,7 @@ export default function BookPage() {
               </div>
             </div>
 
-            <Button className="w-full bg-brand-500 hover:bg-brand-600" disabled={!clientName || !/^[^@]+@[^@]+\.[^@]+$/.test(clientEmail)} onClick={() => setStep(3)}>Continue to deposit</Button>
+            <Button className="w-full bg-brand-500 hover:bg-brand-600" disabled={!clientName || !/^[^@]+@[^@]+\.[^@]+$/.test(clientEmail) || clientPhone.replace(/\D/g, "").length < 10} onClick={() => setStep(3)}>Continue to deposit</Button>
           </div>
         )}
 
@@ -586,7 +592,7 @@ export default function BookPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-brand-50 to-background">
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />

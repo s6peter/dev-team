@@ -73,7 +73,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-brand-50 to-background">
       <Header />
 
       <main className="flex-1">
