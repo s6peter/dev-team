@@ -5,6 +5,27 @@ A Next.js 14 (App Router) + TypeScript + Tailwind salon booking app on a real Su
 **what's built, what's partial, and how to continue**. Design spec lives in [`skills`](./skills)
 (sections v1–v5). Brand palette: **blush pink** (`brand-50…900`, Tailwind) + **black**.
 
+## Repository layout (npm-workspaces monorepo)
+```
+queeng-braids-monorepo/            # root: npm workspaces ["apps/*","packages/*"]
+├── apps/web/                      # @queeng/web — the Next.js app (pages + API routes)
+│   └── src/{app,components?,lib}  #   app/=routes+api; lib/=site.ts; types/=index.ts
+├── packages/                      # domain "services" (extracted, resolved via tsconfig paths)
+│   ├── db/            # @queeng/db — supabase clients + database.types
+│   ├── booking/      # @queeng/booking — booking, pricing, reschedule, availability, time, waitlist, catalog, notify-appointment
+│   ├── payments/     # @queeng/payments — stripe, stripe-client, connect, payouts
+│   ├── shop/         # @queeng/shop — shop order/stock logic
+│   ├── notifications/# @queeng/notifications — email, sms, notifications, notification-log
+│   ├── staff/        # @queeng/staff — auth / admin identity
+│   └── ui/           # @queeng/ui — components/ + utils
+├── supabase/  scripts/  business-info/  .env.local   # shared infra/tooling (root)
+```
+Imports are **unchanged** (`@/lib/*`, `@/components/*`, `@/types/*`) — `apps/web/tsconfig.json`
+`paths` alias them to the packages, so Next resolves them at build + runtime with **no code
+rewrites**. Run everything from the repo **root** (`npm run dev`, `node scripts/e2e.mjs`) — the
+root package.json orchestrates the `@queeng/web` workspace and the supabase/db scripts.
+(For Vercel: set the project root to `apps/web`.)
+
 ## How another tool / developer picks up
 1. `supabase start` (Docker) — local Postgres + Auth + Storage.
 2. Apply schema: migrations run in order from `supabase/migrations/`; seed from `supabase/seed.sql`
@@ -13,9 +34,9 @@ A Next.js 14 (App Router) + TypeScript + Tailwind salon booking app on a real Su
 4. `npm run dev` (serves on **:3456**). Admin login: `queengbraids@gmail.com` / `QueenG!admin2026` (owner);
    `bianca@queengbraids.com` / `Bianca!staff2026` (stylist).
 5. Tests: `node scripts/e2e.mjs` (money/booking paths) and `node scripts/e2e-features.mjs`.
-   Production build **without touching the running dev server**: `NEXT_DIST_DIR=.next-check npx next build`.
+   Production build **without touching the running dev server**: `cd apps/web && NEXT_DIST_DIR=.next-check npx next build`.
 6. Catalog data source of truth: `business-info/catalog.json` → `scripts/build-catalog.mjs` generates SQL.
-7. Money is **integer cents** everywhere; `src/lib/pricing.ts` mirrors the SQL in `hold_slot()`.
+7. Money is **integer cents** everywhere; `packages/booking/src/pricing.ts` mirrors the SQL in `hold_slot()`.
 
 ## Feature status
 

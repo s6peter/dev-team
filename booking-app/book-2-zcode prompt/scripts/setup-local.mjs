@@ -37,8 +37,8 @@ async function main() {
 
   const { error: galleryErr } = await supabase.storage.createBucket("gallery", {
     public: true,
-    fileSizeLimit: "8MB",
-    allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+    fileSizeLimit: "50MB", // short product videos + photos
+    allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "video/webm", "video/quicktime"],
   });
   if (galleryErr && !/already exists/i.test(galleryErr.message)) throw galleryErr;
   console.log("✓ storage bucket 'gallery' ready");

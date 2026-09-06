@@ -8,7 +8,7 @@ Persoba is building and iterating on **QueenG Braids & Essentials**, a salon boo
 ## Active Project
 | Name | What |
 |------|------|
-| **QueenG Braids & Essentials** | Next.js 14 salon booking app with Supabase, Stripe deposits, admin dashboard, multi-staff, payouts, shop, portfolio, reminders, and client self-service |
+| **QueenG Braids & Essentials** | npm-workspaces monorepo: Next.js 14 salon booking app in `apps/web` plus domain packages for Supabase, booking, payments, shop, notifications, staff, and UI |
 
 Full details: `memory/projects/queeng-braids-booking-app.md`
 
@@ -18,15 +18,17 @@ Full details: `memory/projects/queeng-braids-booking-app.md`
 - Before coding, read `PROJECT-STATUS.md`, `README.md`, and relevant files for the requested area.
 - Do not print secrets from `.env.local`; only confirm masked prefixes like `sk_test_...`, `pk_test_...`, `whsec_...`.
 - Local app port is `3456`; current admin URL is usually `http://localhost:3456/admin`.
+- Run project commands from the repo root unless a task specifically targets `apps/web`.
 
 ## Stack
 | Area | Tooling |
 |------|---------|
-| Frontend | Next.js 14 App Router, React 18, TypeScript, Tailwind |
-| Backend | Next API routes, Supabase Postgres/Auth/Storage |
+| Frontend | `apps/web`: Next.js 14 App Router, React 18, TypeScript, Tailwind |
+| Backend | `apps/web/src/app/api` routes plus Supabase Postgres/Auth/Storage |
+| Domain Packages | `packages/booking`, `packages/db`, `packages/payments`, `packages/shop`, `packages/notifications`, `packages/staff`, `packages/ui` |
 | Payments | Stripe PaymentIntent/deposit flow, webhooks, Connect test payouts |
 | Messaging | Resend email, Twilio SMS |
-| Testing | `node scripts/e2e.mjs`, `node scripts/e2e-features.mjs`, `npm run build` or `NEXT_DIST_DIR=.next-check npx next build` |
+| Testing | `node scripts/e2e.mjs`, `node scripts/e2e-features.mjs`, `npm run build`, or `cd apps/web && NEXT_DIST_DIR=.next-check npx next build` |
 
 ## Local Commands
 | Command | Purpose |
@@ -39,5 +41,5 @@ Full details: `memory/projects/queeng-braids-booking-app.md`
 
 ## Current Notes
 - Stripe local env has been configured for test mode with `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, and `STRIPE_WEBHOOK_SECRET`.
-- Keep booking money as integer cents and keep `src/lib/pricing.ts` aligned with SQL pricing logic.
+- Keep booking money as integer cents and keep `packages/booking/src/pricing.ts` aligned with SQL pricing logic.
 - Payment success creates a pending appointment; stylist/owner approval is separate from payment.

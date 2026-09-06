@@ -1,0 +1,107 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/lib/booking": [
+        "../../packages/booking/src/booking"
+      ],
+      "@/lib/pricing": [
+        "../../packages/booking/src/pricing"
+      ],
+      "@/lib/reschedule": [
+        "../../packages/booking/src/reschedule"
+      ],
+      "@/lib/time": [
+        "../../packages/booking/src/time"
+      ],
+      "@/lib/notify-appointment": [
+        "../../packages/booking/src/notify-appointment"
+      ],
+      "@/lib/availability": [
+        "../../packages/booking/src/availability"
+      ],
+      "@/lib/waitlist": [
+        "../../packages/booking/src/waitlist"
+      ],
+      "@/types/catalog": [
+        "../../packages/booking/src/catalog"
+      ],
+      "@/lib/stripe": [
+        "../../packages/payments/src/stripe"
+      ],
+      "@/lib/stripe-client": [
+        "../../packages/payments/src/stripe-client"
+      ],
+      "@/lib/connect": [
+        "../../packages/payments/src/connect"
+      ],
+      "@/lib/payouts": [
+        "../../packages/payments/src/payouts"
+      ],
+      "@/lib/email": [
+        "../../packages/notifications/src/email"
+      ],
+      "@/lib/sms": [
+        "../../packages/notifications/src/sms"
+      ],
+      "@/lib/notifications": [
+        "../../packages/notifications/src/notifications"
+      ],
+      "@/lib/notification-log": [
+        "../../packages/notifications/src/notification-log"
+      ],
+      "@/lib/shop": [
+        "../../packages/shop/src/shop"
+      ],
+      "@/lib/auth": [
+        "../../packages/staff/src/auth"
+      ],
+      "@/lib/supabase/*": [
+        "../../packages/db/src/supabase/*"
+      ],
+      "@/types/database.types": [
+        "../../packages/db/src/database.types"
+      ],
+      "@/lib/utils": [
+        "../../packages/ui/src/utils"
+      ],
+      "@/components/*": [
+        "../../packages/ui/src/components/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next-prodcheck/types/**/*.ts",
+    ".next-check/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
